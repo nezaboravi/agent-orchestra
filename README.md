@@ -19,7 +19,59 @@ is the first fully supported execution harness.
 - **Shared skills** — resend, email best practices, DNS, crash diagnosis, ...
   installed to the portable `~/.agents/skills` source location.
 
-## Start safely
+## Start on a new computer
+
+The bootstrap detects the platform, installs an isolated Node.js runtime when
+needed, installs Herdr and OpenCode, installs the team, verifies every managed
+file and model route, and opens Lenka directly inside a dedicated
+`agent-orchestra` Herdr session.
+It does not depend on Homebrew, Laravel Herd, a particular username, or a
+machine-specific project directory.
+
+macOS or Linux:
+
+```sh
+git clone https://github.com/nezaboravi/agent-orchestra.git
+cd agent-orchestra
+./bootstrap.sh
+```
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/nezaboravi/agent-orchestra.git
+Set-Location agent-orchestra
+.\bootstrap.ps1
+```
+
+The first command is intentionally safe on an already configured machine:
+conflicting files stop the transaction before any write. Pass
+`--conflict backup` on macOS/Linux or `-Conflict backup` on Windows only when
+you explicitly want the old files preserved and replaced.
+
+OpenCode provider credentials are never copied by this repository. If the
+machine has no model matching the declared roles, verification stops and names
+that blocker instead of silently sending project code to a temporary free
+model. Connect the provider in OpenCode and run the same bootstrap again.
+
+## Install into one project
+
+macOS or Linux:
+
+```sh
+./bootstrap.sh --project /path/to/project --project-only
+```
+
+Windows PowerShell:
+
+```powershell
+.\bootstrap.ps1 -Project C:\path\to\project -ProjectOnly
+```
+
+Project-only mode leaves global agent and persona configuration untouched. It
+also preserves an existing project `AGENTS.md`, including Laravel Boost rules.
+
+## Inspect the installer manually
 
 ```sh
 git clone https://github.com/nezaboravi/agent-orchestra
@@ -30,7 +82,7 @@ node orchestra.mjs install --conflict backup
 node orchestra.mjs doctor --installed
 ```
 
-The first command checks Node.js, Herdr, OpenCode, agent definitions, and
+The doctor command checks Node.js, Herdr, OpenCode, agent definitions, and
 permission invariants. The dry run shows every target before anything changes.
 The explicit `backup` policy preserves replaced files and writes a recovery
 manifest. By default, a conflict stops the entire installation before the first
@@ -72,9 +124,17 @@ herdr
 opencode
 ```
 
+The bootstrap uses the named `agent-orchestra` session and starts OpenCode with
+Lenka as its default primary agent, so it never silently reattaches an unrelated
+default workspace such as another active project.
 Herdr keeps the real terminal sessions alive and exposes agent state and
 automation. It does not replace OpenCode; it gives the agent team somewhere to
 run. Desktop clients remain optional.
+
+The user's explicit instruction to start work authorizes normal agent dispatch.
+The orchestra announces the selected roles and models, then continues without
+another approval prompt. Destructive operations and external writes still stop
+at a fresh human-approval boundary.
 
 ## Configuration model
 
@@ -90,4 +150,5 @@ run. Desktop clients remain optional.
 
 - `docs/FORMATS.md` — the format map
 - `docs/ARCHITECTURE.md` — Herdr/OpenCode layers and portability contract
+- `docs/PORTABILITY.md` — platform support, verification levels, and test matrix
 - `proofs/laravel-intent-proof.md` — the repeatable first Laravel acceptance task

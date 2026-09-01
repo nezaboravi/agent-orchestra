@@ -37,6 +37,7 @@ Options:
   --conflict <policy>    fail, skip, or backup (default: fail)
   --dry-run              Show the complete plan without writing
   --installed            With doctor, require every managed file to match
+  --structural           With doctor, verify files/tools without provider models
   --experimental         Enable unverified Claude/Codex/Cursor adapters
   --help                 Show this help
 `);
@@ -56,6 +57,7 @@ function parseArgs(argv) {
     conflict: 'fail',
     dryRun: false,
     installed: false,
+    structural: false,
     experimental: false,
   };
   const valueAfter = (flag) => {
@@ -68,6 +70,7 @@ function parseArgs(argv) {
     if (arg === '--help' || arg === '-h') usage();
     if (arg === '--dry-run') options.dryRun = true;
     else if (arg === '--installed') options.installed = true;
+    else if (arg === '--structural') options.structural = true;
     else if (arg === '--experimental') options.experimental = true;
     else if (arg === '--tool') options.selectedTools.push(...valueAfter(arg).split(',').filter(Boolean));
     else if (arg === '--home') options.home = path.resolve(valueAfter(arg));
@@ -464,9 +467,14 @@ function doctor(options) {
     const inventory = modelInventory(options.home);
     const resolved = resolveModels(inventory);
     options.resolvedModels = resolved;
-    check(inventory.length > 0, 'OpenCode model inventory', inventory.length ? `${inventory.length} models` : 'no authenticated provider models found');
-    for (const [role, selectedModel] of Object.entries(resolved)) {
-      check(Boolean(selectedModel), `model route ${role}`, selectedModel || 'no candidate available');
+    if (options.structural) {
+      const matchedRoutes = Object.values(resolved).filter(Boolean).length;
+      console.log(`INFO OpenCode provider models — ${inventory.length} available; ${matchedRoutes}/${Object.keys(resolved).length} role routes matched`);
+    } else {
+      check(inventory.length > 0, 'OpenCode model inventory', inventory.length ? `${inventory.length} models` : 'no authenticated provider models found');
+      for (const [role, selectedModel] of Object.entries(resolved)) {
+        check(Boolean(selectedModel), `model route ${role}`, selectedModel || 'no candidate available');
+      }
     }
   }
   if (!options.projectOnly) {

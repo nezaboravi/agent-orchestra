@@ -18,7 +18,7 @@
   },
   "modelPolicy": {
     "inventoryBeforeDispatch": true,
-    "humanConfirmationBeforeFirstDispatch": true,
+    "humanConfirmationBeforeFirstDispatch": false,
     "recordActualTokensAndCost": true,
     "classes": {
       "coordination": "mid",

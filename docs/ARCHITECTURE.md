@@ -19,7 +19,9 @@ Desktop clients are optional views and manual workspaces. The autonomous path
 must work without a desktop application so the same repository can be tested
 on macOS, Linux, and Windows.
 
-The unattended OpenCode run may use auto mode, but auto mode is not the safety
+An explicit user instruction to start work authorizes normal team dispatch, so
+the orchestra announces the plan and continues without a redundant approval
+prompt. The unattended OpenCode run may use auto mode, but auto mode is not the safety
 boundary. Explicit agent-level denials remain the boundary: destructive Git,
 file deletion, database resets, remote shells, downloads, publishing, and
 external-directory access are denied. Work that genuinely requires one of
@@ -54,6 +56,12 @@ finish, but `doctor` fails with an authentication blocker instead of claiming
 that the team is ready.
 
 ## Cross-machine acceptance test
+
+The supported entrypoints are `bootstrap.sh` on macOS/Linux and
+`bootstrap.ps1` on Windows. They provide the prerequisite installation and run
+the lower-level sequence below. See `docs/PORTABILITY.md` for the platform
+matrix and the difference between structural, authenticated, and behavioral
+proof.
 
 The same commit must pass this sequence on every test computer:
 

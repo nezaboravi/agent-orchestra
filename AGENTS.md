@@ -44,8 +44,10 @@ Before dispatching a team, follow the model dispatch protocol:
 2. Assign per role: volume work → cheapest model; planning and mid-level
    coding → a mid model; judgment (final audit, review) → the strongest
    model available.
-3. Announce the plan (which agent, which model, why) and ask for
-   confirmation before dispatching.
+3. Treat the user's explicit start instruction as dispatch authorization.
+   Announce which agent and model will run and why, then continue without an
+   extra confirmation prompt. Stop only at a destructive or external-write
+   boundary that requires fresh human approval.
 4. Report the actual spend after the job: agent, model, tokens, cost.
 
 ## Permissions and safety

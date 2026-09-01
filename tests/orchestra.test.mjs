@@ -57,6 +57,15 @@ test('unattended builder keeps destructive and external operations denied', () =
   }
 });
 
+test('explicit start instruction dispatches without redundant confirmation', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, 'orchestra.json'), 'utf8'));
+  const lenka = fs.readFileSync(path.join(repoRoot, 'agents', 'lenka.md'), 'utf8');
+
+  assert.equal(config.modelPolicy.humanConfirmationBeforeFirstDispatch, false);
+  assert.match(lenka, /user's explicit instruction to start the job is dispatch authorization/);
+  assert.doesNotMatch(lenka, /Announce and ask before dispatch/);
+});
+
 test('clean-room plan omits machine-specific symlinks', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-plan-'));
   const plan = buildPlan({
@@ -124,6 +133,7 @@ test('declared workflow resolves to real team agents', () => {
     assert.ok(fs.existsSync(path.join(repoRoot, 'teams', 'dev', `${role}.md`)), `${role} must exist`);
   }
   assert.deepEqual(config.team.workflow.map((step) => step.phase), ['plan', 'build', 'verify', 'prove']);
+  assert.equal(config.modelPolicy.humanConfirmationBeforeFirstDispatch, false);
 });
 
 test('model routing selects real candidates and degrades honestly', () => {
