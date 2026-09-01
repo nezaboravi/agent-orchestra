@@ -3,7 +3,7 @@ description: GPT 5.6 Sol High image and PDF analyst used automatically when the 
 mode: subagent
 model: openai/gpt-5.6-sol
 variant: high
-steps: 4
+steps: 6
 color: info
 permission: deny
 ---

@@ -6,6 +6,7 @@ description: >
   each phase output, and escalates to Lenka (or the human) only when the team
   gets stuck after its own retries.
 mode: subagent
+steps: 60
 permission:
   edit: deny
   task:

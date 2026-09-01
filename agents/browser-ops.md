@@ -3,7 +3,7 @@ description: Uses Playwright with GPT 5.6 Sol High for authenticated dashboards,
 mode: subagent
 model: openai/gpt-5.6-sol
 variant: high
-steps: 30
+steps: 45
 color: warning
 permission:
   edit: deny

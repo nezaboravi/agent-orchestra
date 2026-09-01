@@ -3,7 +3,7 @@ description: Researches current non-Laravel library documentation through Contex
 mode: subagent
 model: opencode-go/deepseek-v4-flash
 variant: high
-steps: 8
+steps: 12
 color: info
 permission:
   edit: deny

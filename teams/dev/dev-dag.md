@@ -5,6 +5,7 @@ description: >
   dependent work after its prerequisites. Tracks status and reports the graph
   and schedule to the lead. Cannot write code itself.
 mode: subagent
+steps: 25
 permission:
   edit: deny
   bash: deny

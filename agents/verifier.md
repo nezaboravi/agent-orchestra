@@ -3,7 +3,7 @@ description: Runs project-aware focused tests, formatters, linters, and static c
 mode: subagent
 model: opencode-go/deepseek-v4-flash
 variant: high
-steps: 12
+steps: 18
 color: success
 permission:
   edit: deny

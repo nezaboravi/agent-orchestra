@@ -3,7 +3,7 @@ description: Expensive escalation specialist for bugs that survived three verifi
 mode: subagent
 model: openai/gpt-5.6-sol
 variant: high
-steps: 22
+steps: 33
 color: error
 permission:
   task: deny

@@ -3,7 +3,7 @@ description: Investigates reproducible bugs, logs, failing tests, and root cause
 mode: subagent
 model: opencode-go/deepseek-v4-flash
 variant: max
-steps: 15
+steps: 22
 color: warning
 permission:
   task: deny

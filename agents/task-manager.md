@@ -3,7 +3,7 @@ description: Creates, updates, searches, and organizes Taskavel tasks from expli
 mode: subagent
 model: opencode-go/deepseek-v4-flash
 variant: high
-steps: 10
+steps: 30
 color: accent
 permission:
   edit: deny

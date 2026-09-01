@@ -4,6 +4,7 @@ description: >
   failures with exact reproduction steps. May only edit test files — never
   application code.
 mode: subagent
+steps: 30
 permission:
   edit:
     "*": deny

@@ -3,7 +3,7 @@ description: Creates or loads concise project-local session handoffs through con
 mode: subagent
 model: opencode-go/deepseek-v4-flash
 variant: high
-steps: 6
+steps: 8
 color: secondary
 permission:
   read: allow

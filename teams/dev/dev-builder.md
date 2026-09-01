@@ -5,6 +5,7 @@ description: >
   minimal verification needed for its own step; the tester and auditor verify
   the whole.
 mode: subagent
+steps: 40
 permission:
   edit: allow
   bash:

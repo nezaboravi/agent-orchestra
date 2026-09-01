@@ -3,7 +3,7 @@ description: Optional independent Kimi K3 second opinion for explicit model comp
 mode: subagent
 model: opencode-go/kimi-k3
 variant: max
-steps: 15
+steps: 22
 color: secondary
 permission:
   edit: deny

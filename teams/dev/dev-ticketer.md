@@ -5,6 +5,7 @@ description: >
   (so the DAG agent can build the graph), rich descriptions, and the project
   name from the plan. Read-only for everything except task creation.
 mode: subagent
+steps: 25
 permission:
   edit: deny
   bash: deny

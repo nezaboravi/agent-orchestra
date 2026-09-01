@@ -3,7 +3,7 @@ description: Implements scoped everyday code changes and proves them with focuse
 mode: subagent
 model: opencode-go/deepseek-v4-flash
 variant: max
-steps: 18
+steps: 27
 color: success
 permission:
   task: deny

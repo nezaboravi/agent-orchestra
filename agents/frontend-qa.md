@@ -3,7 +3,7 @@ description: Uses Playwright with GPT 5.6 Sol High to verify application UI on d
 mode: subagent
 model: openai/gpt-5.6-sol
 variant: high
-steps: 24
+steps: 36
 color: info
 permission:
   edit: deny

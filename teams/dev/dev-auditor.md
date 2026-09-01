@@ -4,6 +4,7 @@ description: >
   linters, static analysis, checks the result against the plan. Cannot change
   any file — proof only.
 mode: subagent
+steps: 30
 permission:
   edit: deny
   write: deny

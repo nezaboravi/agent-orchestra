@@ -4,6 +4,7 @@ description: >
   steps, files to touch, risks, and verification criteria. Returns the plan for
   approval. CANNOT edit any file — planning only.
 mode: subagent
+steps: 25
 permission:
   edit: deny
   write: deny

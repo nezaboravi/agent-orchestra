@@ -3,7 +3,7 @@ description: Independent read-only reviewer for bugs, regressions, security risk
 mode: subagent
 model: openai/gpt-5.6-sol
 variant: high
-steps: 10
+steps: 15
 color: accent
 permission:
   edit: deny

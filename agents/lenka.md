@@ -1,7 +1,7 @@
 ---
 description: Primary budget-aware engineering orchestrator for everyday work across all projects.
 mode: primary
-steps: 30
+steps: 60
 color: primary
 permission:
   task:
