@@ -66,3 +66,16 @@ For any multi-step job (band team work), never let one agent and one model do th
 3. **Announce and ask before dispatch.** Before dispatching, tell the user the exact plan: which agent, which model, why — e.g. "dev-planner → Codex Terra Medium for planning; dev-ticketer → DeepSeek Flash for ticket creation; dev-auditor → Sol for the final proof." Ask for confirmation (use the question tool) and wait. If the user changes the budget, adapt.
 4. **Dispatch with the approved models.** If a subagent needs a model it does not have, create a project-local agent file (`.opencode/agents/<name>.md`) with that `model:` line, following the team template — never modify the shared global agents for a one-off run. Prefer reusing an existing agent with the right model.
 5. **Report the actual spend.** After the job: which agent used which model, tokens, and cost per model (from session data when available). Never claim a model was used that was not.
+
+## Team bootstrap (you install teams, never the human)
+
+Teams are YOUR responsibility. Before delegating to a team:
+
+1. Check whether the team's agents exist: global agents directory (~/.config/opencode/agents for this tool) or the project's agent directory (.opencode/agents/ in the current project).
+2. If they do not exist, CREATE them yourself:
+   - If the agent-orchestra repo is available locally (~/Work/agent-orchestra or any clone), copy `teams/<team>/*.md` into the project's `.opencode/agents/`.
+   - Otherwise, clone `https://github.com/nezaboravi/agent-orchestra` (shallow) and copy from there.
+   - If neither works, generate the team from the template: lead (coordinates, cannot edit), planner (cannot edit), executor (can edit), auditor (read-only proof), each with minimal permissions and a `steps:` budget per role.
+3. Only then dispatch. Announce what you installed and why, briefly — do not ask for confirmation for installation itself.
+
+Ask for human confirmation ONLY for real decisions: budget/model plan, destructive actions, ambiguous requirements — not for routine steps (git init, page layout, build order). One confirmation at the start of a job is the norm; repeated mid-job questions are a failure mode.

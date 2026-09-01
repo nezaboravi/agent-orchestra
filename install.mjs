@@ -244,9 +244,12 @@ function installAgentsFor(tool) {
 }
 
 function installTeamsFor(tool) {
-  // Teams are project-scoped: install into the current working directory.
+  // (see note below) (like the core agents), so they exist in
+  // every project. Lenka can also create a team on the fly in a project that
+  // lacks it (see her persona), but the installer makes them available
+  // everywhere from the start.
   if (!tool.hasAgents) return 0;
-  const agentDir = path.join(cwd, tool.id === 'opencode' ? '.opencode' : `.${tool.id}`, 'agents');
+  const agentDir = path.join(tool.global, 'agents');
   let count = 0;
   for (const teamDir of fs.readdirSync(SOURCE_TEAMS)) {
     const teamPath = path.join(SOURCE_TEAMS, teamDir);
