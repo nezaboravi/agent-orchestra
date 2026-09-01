@@ -11,11 +11,34 @@ permission:
   bash:
     "*": allow
     "git push*": deny
+    "git reset*": deny
     "git reset --hard*": deny
     "git clean*": deny
+    "git checkout --*": deny
+    "git restore*": deny
+    "rm *": deny
     "rm -rf*": deny
+    "sudo *": deny
+    "dd *": deny
+    "mkfs*": deny
+    "shutdown*": deny
+    "reboot*": deny
+    "kill *": deny
+    "pkill *": deny
+    "ssh *": deny
+    "scp *": deny
+    "rsync *": deny
+    "curl *": deny
+    "wget *": deny
+    "gh *": deny
+    "npm publish*": deny
+    "composer global*": deny
     "php artisan migrate:fresh*": deny
+    "php artisan migrate:reset*": deny
+    "php artisan migrate:rollback*": deny
+    "php artisan db:wipe*": deny
     "npm run build*": ask
+  external_directory: deny
   task: deny
   skill: deny
 ---
@@ -37,9 +60,9 @@ with the smallest correct diff at each step.
 
 ## Rules
 
-- Never run destructive commands (force push, hard reset, mass deletes,
-  database resets) — they are denied anyway; if you think one is needed, say
-  why instead.
+- Never run destructive or external commands (force push, resets, deletions,
+  remote shells, downloads, publishing, database resets) — they are denied.
+  If one is genuinely needed, stop and report why instead.
 - Never change tests to make them pass; if a test reveals a real issue, fix
   the code.
 - Follow the plan. If the plan turns out wrong mid-way, stop and report back —

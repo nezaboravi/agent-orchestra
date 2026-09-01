@@ -1,8 +1,8 @@
 # agent-orchestra
 
-Teams of specialized agents, one orchestrator — Lenka. Install it in any agent
-CLI: OpenCode, Claude Code, Codex, Cursor, Kimi, Gemini, Aider. Cross-platform:
-Windows, macOS, Linux.
+Your portable development team: Lenka orchestrates specialized agents that turn
+intent into verified behavior. Herdr is the persistent runtime and OpenCode CLI
+is the first fully supported execution harness.
 
 ## What you get
 
@@ -17,51 +17,77 @@ Windows, macOS, Linux.
     dev-tester, dev-auditor (plan → Taskavel tickets → DAG → build → prove)
   - more teams (email, travel, finance...) follow the same template
 - **Shared skills** — resend, email best practices, DNS, crash diagnosis, ...
-  installed to `~/.agents/skills` (read by every tool).
+  installed to the portable `~/.agents/skills` source location.
 
-## Install
+## Start safely
 
 ```sh
 git clone https://github.com/nezaboravi/agent-orchestra
 cd agent-orchestra
-node install.mjs
+node orchestra.mjs doctor
+node orchestra.mjs install --dry-run
+node orchestra.mjs install --conflict backup
+node orchestra.mjs doctor --installed
 ```
 
-Requires Node.js only (you already have it if you use any of these CLIs).
+The first command checks Node.js, Herdr, OpenCode, agent definitions, and
+permission invariants. The dry run shows every target before anything changes.
+The explicit `backup` policy preserves replaced files and writes a recovery
+manifest. By default, a conflict stops the entire installation before the first
+write. Existing symbolic links are protected and never replaced, including
+links to a user's canonical persona file.
 
-The installer detects which tools you have and converts the agents into each
-tool's native format — nothing to copy by hand:
+Install into one project only when you ask for it:
 
-| Tool | Agents (global) | Teams (per project) | Persona |
-|---|---|---|---|
-| OpenCode | `~/.config/opencode/agents/*.md` | `.opencode/agents/` | `~/.config/opencode/AGENTS.md` |
-| Claude Code | `~/.claude/agents/*.md` | `.claude/agents/` | `~/.claude/CLAUDE.md` |
-| Codex | `~/.codex/agents/*.toml` | `.codex/agents/` | `~/.codex/AGENTS.md` |
-| Cursor | `~/.cursor/agents/*.md` | `.cursor/agents/` | `~/.cursor/rules/lenka.mdc` |
-| Kimi / Gemini / Aider | rules only | — | `~/.<tool>/AGENTS.md` |
-
-Skills for everyone: `~/.agents/skills` (shared location read by all tools).
-Project `AGENTS.md` (Lenka persona) is written into the repo you run the
-installer from.
-
-## After install
-
-Open your agent CLI in any project:
-
+```sh
+node orchestra.mjs install --project /path/to/laravel-app --project-only --conflict backup
+node orchestra.mjs doctor --project /path/to/laravel-app --project-only --installed
 ```
-> Lenka: Hello, I'm your orchestrator. Dev team is ready. What are we building?
+
+`--project-only` is the safe proof mode: it leaves the user's global persona,
+agents, and shared skills untouched. If the project already has `AGENTS.md`
+(for example, Laravel Boost guidelines), those instructions are preserved.
+Its ignored recovery manifests stay inside `.agent-orchestra/` in that project.
+
+OpenCode is the stable adapter. Other format converters are present for testing
+but require `--experimental`; they are not claimed as end-to-end supported yet.
+
+| Tool | Status | Agents (global) | Teams (explicit project install) | Persona |
+|---|---|---|---|---|
+| OpenCode | Supported | `~/.config/opencode/agents/*.md` | `.opencode/agents/` | `~/.config/opencode/AGENTS.md` |
+| Claude Code | Experimental | `~/.claude/agents/*.md` | `.claude/agents/` | `~/.claude/CLAUDE.md` |
+| Codex | Experimental | `~/.codex/agents/*.toml` | `.codex/agents/` | `~/.codex/AGENTS.md` |
+| Cursor | Experimental | `~/.cursor/agents/*.md` | `.cursor/agents/` | `~/.cursor/rules/lenka.mdc` |
+
+Shared skills are installed into `~/.agents/skills`. Project files are never
+written merely because the installer was launched from that directory.
+
+## Runtime
+
+Start Herdr from a project and run OpenCode in a pane:
+
+```sh
+cd /path/to/project
+herdr
+opencode
 ```
+
+Herdr keeps the real terminal sessions alive and exposes agent state and
+automation. It does not replace OpenCode; it gives the agent team somewhere to
+run. Desktop clients remain optional.
 
 ## Configuration model
 
-- **Rules are portable** — AGENTS.md works in every tool.
-- **Agents are converted** — the source of truth is OpenCode-format markdown;
-  the installer generates Claude/Codex/Cursor formats.
-- **Skills are shared** — one location, every tool reads it.
-- **Models are your choice** — agents inherit your tool's model; per-agent
-  `model:` lines are honored where supported (OpenCode, Codex).
+- **Rules are portable** — repository files are the source of truth.
+- **Agents are generated safely** — nested permissions are parsed and checked;
+  unverified adapters are opt-in.
+- **Skills have one source** — adapters expose the shared location when their
+  client supports it.
+- **Models are inventoried** — dispatch is chosen from models available on the
+  current machine and actual usage is reported after the run.
 
 ## See also
 
 - `docs/FORMATS.md` — the format map
-- The bandstands website — the full story, diagrams and examples
+- `docs/ARCHITECTURE.md` — Herdr/OpenCode layers and portability contract
+- `proofs/laravel-intent-proof.md` — the repeatable first Laravel acceptance task

@@ -21,11 +21,16 @@ permission:
     "./vendor/bin/phpunit*": allow
     "./vendor/bin/pest*": allow
     "php artisan migrate*": ask
+    "php artisan migrate:fresh*": deny
+    "php artisan migrate:reset*": deny
+    "php artisan migrate:rollback*": deny
+    "php artisan db:wipe*": deny
     "npm run test*": allow
     "npm run lint*": allow
     "ls *": allow
   task: deny
   skill: deny
+  external_directory: deny
 ---
 
 You are the **Dev Tester**. Your job: prove the build works — or find exactly

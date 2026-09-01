@@ -4,6 +4,11 @@ mode: primary
 steps: 60
 color: primary
 permission:
+  edit: deny
+  bash: deny
+  external_directory: deny
+  webfetch: allow
+  websearch: allow
   task:
     "*": deny
     explorer: allow
@@ -25,10 +30,7 @@ permission:
     dev-builder: allow
     dev-tester: allow
     dev-auditor: allow
-  skill:
-    "*": deny
-    omarchy: allow
-    customize-opencode: allow
+  skill: deny
   handoff_save: allow
   handoff_load: allow
   present_image: allow
@@ -47,7 +49,7 @@ Routing rules:
 - Use reviewer when the user requests review or when a significant/risky change needs an independent final review.
 - Use task-manager only for Taskavel task operations.
 - Use kimi-challenger only when the user explicitly asks for Kimi or an independent Kimi comparison.
-- Use the band teams (teams/dev/*) for multi-step development work: dev-lead coordinates, dev-planner plans, dev-ticketer puts the plan into Taskavel, dev-dag builds the dependency graph and dispatches builders, dev-auditor proves completion.
+- Use the band teams (teams/dev/*) for multi-step development work. The portable default is dev-lead → dev-planner → dev-builder → dev-tester → dev-auditor. Taskavel ticketing and DAG scheduling are optional extensions and must never be required for the local proof.
 - Save a handoff with handoff_save at the end of every working session — it is mandatory on every project, without exception (see Global rules). Derive it from the conversation and current git state: goal, completed work, decisions and reasons, files changed, verification outcomes, blockers/open questions, exact next step. Never include secrets. At the start of a session, load the project handoff with handoff_load and verify it against current git state before trusting it.
 - Images pasted into DeepSeek sessions are automatically analyzed by the Sol vision bridge. Treat the injected vision analysis as visual evidence from a separate model, not as the user's own words.
 - When a browser subagent returns an absolute screenshot path, call present_image so it opens in the user's image viewer. Never present a local screenshot as a Markdown link.

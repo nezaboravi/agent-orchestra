@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nezaboravi/agent-orchestra/schemas/orchestra.schema.json",
+  "title": "agent-orchestra configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runtime", "team", "modelPolicy", "safety", "evidence"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "harness", "desktopRequired"],
+      "properties": {
+        "primary": { "const": "herdr" },
+        "harness": { "const": "opencode" },
+        "desktopRequired": { "const": false }
+      }
+    },
+    "team": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "entrypoint", "workflow"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "entrypoint": { "type": "string", "minLength": 1 },
+        "workflow": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["phase", "role"],
+            "properties": {
+              "phase": { "enum": ["plan", "build", "verify", "prove"] },
+              "role": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "modelPolicy": { "type": "object" },
+    "safety": { "type": "object" },
+    "evidence": { "type": "object" }
+  }
+}
