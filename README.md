@@ -1,8 +1,8 @@
 # agent-orchestra
 
 Your portable development team: Lenka orchestrates specialized agents that turn
-intent into verified behavior. Herdr is the persistent runtime and OpenCode CLI
-is the first fully supported execution harness.
+intent into verified behavior. Herdr is the persistent runtime; Codex, Claude
+Code, and OpenCode have provider-neutral adapters behind the same team rules.
 
 ## What you get
 
@@ -22,8 +22,8 @@ is the first fully supported execution harness.
 ## Start on a new computer
 
 The bootstrap detects the platform, installs an isolated Node.js runtime when
-needed, installs Herdr and OpenCode, installs the team, verifies every managed
-file and model route, and opens Lenka directly inside a dedicated
+needed, installs Herdr, detects an authenticated harness, installs the team,
+verifies a real model response, and opens Lenka directly inside a dedicated
 `agent-orchestra` Herdr session.
 It does not depend on Homebrew, Laravel Herd, a particular username, or a
 machine-specific project directory.
@@ -49,10 +49,30 @@ conflicting files stop the transaction before any write. Pass
 `--conflict backup` on macOS/Linux or `-Conflict backup` on Windows only when
 you explicitly want the old files preserved and replaced.
 
-OpenCode provider credentials are never copied by this repository. If the
-machine has no model matching the declared roles, verification stops and names
-that blocker instead of silently sending project code to a temporary free
-model. Connect the provider in OpenCode and run the same bootstrap again.
+Credentials are never copied between tools. In automatic mode the Unix
+bootstrap tries Codex with an existing ChatGPT sign-in, then Claude Code with
+Haiku as its economical first route, then OpenCode providers such as Kimi. A harness is selected only after a minimal
+live response succeeds. If none works, verification stops and asks the user to
+sign in; it never claims READY from a model list alone.
+
+Choose a harness explicitly when wanted:
+
+```sh
+./bootstrap.sh --harness codex
+./bootstrap.sh --harness claude
+./bootstrap.sh --harness opencode
+```
+
+Codex itself can also be launched directly from any project after bootstrap:
+
+```sh
+cd /path/to/project
+codex
+```
+
+Codex loads Lenka from `AGENTS.md` and discovers the installed team in
+`~/.codex/agents/`. A ChatGPT-authenticated Codex user does not need OpenCode,
+DeepSeek, Kimi, or a Claude subscription for that path.
 
 ## Install into one project
 
@@ -82,7 +102,7 @@ node orchestra.mjs install --conflict backup
 node orchestra.mjs doctor --installed
 ```
 
-The doctor command checks Node.js, Herdr, OpenCode, agent definitions, and
+The doctor command checks Node.js, Herdr, the selected harness, agent definitions, and
 permission invariants. The dry run shows every target before anything changes.
 The explicit `backup` policy preserves replaced files and writes a recovery
 manifest. By default, a conflict stops the entire installation before the first
@@ -101,14 +121,15 @@ agents, and shared skills untouched. If the project already has `AGENTS.md`
 (for example, Laravel Boost guidelines), those instructions are preserved.
 Its ignored recovery manifests stay inside `.agent-orchestra/` in that project.
 
-OpenCode is the stable adapter. Other format converters are present for testing
-but require `--experimental`; they are not claimed as end-to-end supported yet.
+Codex and Claude Code have authenticated adapter proofs; their complete
+PLAN → BUILD → VERIFY → PROVE behavior proofs are still pending. OpenCode is
+the original adapter. Cursor remains experimental and requires `--experimental`.
 
 | Tool | Status | Agents (global) | Teams (explicit project install) | Persona |
 |---|---|---|---|---|
 | OpenCode | Supported | `~/.config/opencode/agents/*.md` | `.opencode/agents/` | `~/.config/opencode/AGENTS.md` |
-| Claude Code | Experimental | `~/.claude/agents/*.md` | `.claude/agents/` | `~/.claude/CLAUDE.md` |
-| Codex | Experimental | `~/.codex/agents/*.toml` | `.codex/agents/` | `~/.codex/AGENTS.md` |
+| Claude Code | Authenticated adapter; full behavior proof pending | `~/.claude/agents/*.md` | `.claude/agents/` | `~/.claude/CLAUDE.md` |
+| Codex | Authenticated adapter; full behavior proof pending | `~/.codex/agents/*.toml` | `.codex/agents/` | `~/.codex/AGENTS.md` |
 | Cursor | Experimental | `~/.cursor/agents/*.md` | `.cursor/agents/` | `~/.cursor/rules/lenka.mdc` |
 
 Shared skills are installed into `~/.agents/skills`. Project files are never
@@ -116,20 +137,20 @@ written merely because the installer was launched from that directory.
 
 ## Runtime
 
-Start Herdr from a project and run OpenCode in a pane:
+Start Herdr from a project. The bootstrap configures its pane to open the
+verified harness automatically:
 
 ```sh
 cd /path/to/project
 herdr
-opencode
 ```
 
-The bootstrap uses the named `agent-orchestra` session and starts OpenCode with
-Lenka as its default primary agent, so it never silently reattaches an unrelated
+The bootstrap uses the named `agent-orchestra` session and starts the selected
+harness with Lenka's instructions, so it never silently reattaches an unrelated
 default workspace such as another active project.
 Herdr keeps the real terminal sessions alive and exposes agent state and
-automation. It does not replace OpenCode; it gives the agent team somewhere to
-run. Desktop clients remain optional.
+automation. It does not replace the selected harness; it gives the agent team
+somewhere to run. Desktop clients remain optional.
 
 The user's explicit instruction to start work authorizes normal agent dispatch.
 The orchestra announces the selected roles and models, then continues without
@@ -143,8 +164,9 @@ at a fresh human-approval boundary.
   unverified adapters are opt-in.
 - **Skills have one source** — adapters expose the shared location when their
   client supports it.
-- **Models are inventoried** — dispatch is chosen from models available on the
-  current machine and actual usage is reported after the run.
+- **Models are adapter-specific** — Codex, Claude, and OpenCode never share
+  credentials or model identifiers. Availability is checked with a real
+  response, and actual usage is reported after the run.
 
 ## See also
 

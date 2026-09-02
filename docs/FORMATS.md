@@ -1,9 +1,8 @@
 # Agent formats — the map
 
 One source of truth (OpenCode-format markdown in `agents/` and `teams/`) is
-installed by `orchestra.mjs`. OpenCode is the stable adapter. The other
-converters below are experimental until each one passes an end-to-end client
-test on a clean machine.
+installed by `orchestra.mjs`. Codex, Claude Code, and OpenCode have independent
+model routes and credentials.
 
 ## OpenCode
 
@@ -12,22 +11,22 @@ test on a clean machine.
   (allow/ask/deny per tool: read, edit, bash, task, skill, ...), `steps`
 - Permission model: explicit allowlists, glob patterns, `"*": deny` default
 
-## Claude Code (experimental)
+## Claude Code
 
 - Location: `~/.claude/agents/*.md` (global), `.claude/agents/` (project)
 - Frontmatter: `name` (required), `description`, `tools` (allowlist), `model`
 - Conversion: `permission:` → `tools:` list; Bash rules become `Bash(pattern)`
-  where possible; `task` → `Task`; model lines are dropped when the model is
-  not a Claude model (inherit the tool's default instead)
+  where possible; `task` → `Task`; the selected Claude model is written only
+  after its live probe succeeds
 
-## Codex CLI (experimental)
+## Codex CLI
 
 - Location: `~/.codex/agents/*.toml` (personal), `.codex/agents/` (project)
 - Keys: `name`, `description`, `developer_instructions` (required), optional
   `model`, `model_reasoning_effort`, `sandbox_mode`, `mcp_servers`, `skills.config`
 - Conversion: `edit: deny` → `sandbox_mode = "read-only"`; otherwise
-  `"workspace-write"`; `openai/*` models are kept (prefix stripped), other
-  models dropped (inherit); MCP hints from permission keys are noted in a comment
+  `"workspace-write"`; the model slug comes from Codex's own visible catalog
+  and is written only after a live probe succeeds
 
 ## Cursor (experimental)
 

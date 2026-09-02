@@ -12,6 +12,7 @@ PROJECT_ONLY=0
 NO_LAUNCH=0
 STRUCTURAL_ONLY=0
 CONFLICT="fail"
+HARNESS="auto"
 
 usage() {
   cat <<'EOF'
@@ -24,6 +25,7 @@ Options:
   --project PATH       Install project-local agents into PATH
   --project-only       Leave global configuration untouched (requires --project)
   --conflict POLICY    fail, skip, or backup (default: fail)
+  --harness NAME       auto, codex, claude, or opencode (default: auto)
   --no-launch          Verify setup without opening Herdr
   --structural-only    Do not require an authenticated OpenCode provider
   --help               Show this help
@@ -36,6 +38,7 @@ while [ "$#" -gt 0 ]; do
     --project) [ "$#" -ge 2 ] || { echo "ERROR: --project requires a path" >&2; exit 2; }; PROJECT=$2; shift 2 ;;
     --project-only) PROJECT_ONLY=1; shift ;;
     --conflict) [ "$#" -ge 2 ] || { echo "ERROR: --conflict requires a policy" >&2; exit 2; }; CONFLICT=$2; shift 2 ;;
+    --harness) [ "$#" -ge 2 ] || { echo "ERROR: --harness requires a name" >&2; exit 2; }; HARNESS=$2; shift 2 ;;
     --no-launch) NO_LAUNCH=1; shift ;;
     --structural-only) STRUCTURAL_ONLY=1; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -44,6 +47,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$CONFLICT" in fail|skip|backup) ;; *) echo "ERROR: --conflict must be fail, skip, or backup" >&2; exit 2 ;; esac
+case "$HARNESS" in auto|codex|claude|opencode) ;; *) echo "ERROR: --harness must be auto, codex, claude, or opencode" >&2; exit 2 ;; esac
 [ "$PROJECT_ONLY" -eq 0 ] || [ -n "$PROJECT" ] || { echo "ERROR: --project-only requires --project" >&2; exit 2; }
 
 case "$TARGET_HOME" in /*) ;; *) TARGET_HOME="$(pwd)/$TARGET_HOME" ;; esac
@@ -117,36 +121,73 @@ install_opencode() {
   command -v opencode >/dev/null 2>&1 || fail "OpenCode installation did not produce an executable"
 }
 
+install_codex() {
+  command -v codex >/dev/null 2>&1 && return 0
+  need curl
+  step "Installing Codex into the isolated runtime"
+  curl -fsSL https://chatgpt.com/codex/install.sh | sh
+  command -v codex >/dev/null 2>&1 || fail "Codex installation did not produce an executable"
+}
+
+codex_authenticated() {
+  command -v codex >/dev/null 2>&1 && codex login status >/dev/null 2>&1
+}
+
+claude_authenticated() {
+  command -v claude >/dev/null 2>&1 && claude auth status 2>/dev/null | grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true'
+}
+
 step "Preparing portable runtime"
 install_node
 install_herdr
-install_opencode
+
+case "$HARNESS" in
+  codex) install_codex ;;
+  claude) command -v claude >/dev/null 2>&1 || fail "Claude Code is not installed; install it or choose --harness codex/opencode" ;;
+  opencode) install_opencode ;;
+  auto)
+    if ! command -v codex >/dev/null 2>&1 && ! command -v claude >/dev/null 2>&1 && ! command -v opencode >/dev/null 2>&1; then
+      install_codex
+    fi
+    ;;
+esac
 
 step "Detected tools"
 node --version
 herdr --version
-opencode --version
 
-step "Installing the agent team"
-# Paths are validated above and passed as individual arguments through this helper.
-set -- install --home "$TARGET_HOME" --conflict "$CONFLICT"
-if [ -n "$PROJECT" ]; then set -- "$@" --project "$PROJECT"; fi
-if [ "$PROJECT_ONLY" -eq 1 ]; then set -- "$@" --project-only; fi
-node "$REPO_DIR/orchestra.mjs" "$@"
+if [ "$HARNESS" = "auto" ]; then CANDIDATES="codex claude opencode"; else CANDIDATES="$HARNESS"; fi
+SELECTED_HARNESS=""
+for candidate in $CANDIDATES; do
+  command -v "$candidate" >/dev/null 2>&1 || continue
+  if [ "$candidate" = "codex" ] && ! codex_authenticated && [ "$STRUCTURAL_ONLY" -eq 0 ]; then continue; fi
+  if [ "$candidate" = "claude" ] && ! claude_authenticated && [ "$STRUCTURAL_ONLY" -eq 0 ]; then continue; fi
 
-step "Verifying files and runtime"
-set -- doctor --home "$TARGET_HOME" --installed --structural
-if [ -n "$PROJECT" ]; then set -- "$@" --project "$PROJECT"; fi
-if [ "$PROJECT_ONLY" -eq 1 ]; then set -- "$@" --project-only; fi
-node "$REPO_DIR/orchestra.mjs" "$@"
-
-if [ "$STRUCTURAL_ONLY" -eq 0 ]; then
-  step "Verifying authenticated model routes"
-  set -- doctor --home "$TARGET_HOME" --installed
+  step "Trying the $candidate harness"
+  set -- install --home "$TARGET_HOME" --conflict "$CONFLICT" --tool "$candidate"
   if [ -n "$PROJECT" ]; then set -- "$@" --project "$PROJECT"; fi
   if [ "$PROJECT_ONLY" -eq 1 ]; then set -- "$@" --project-only; fi
-  node "$REPO_DIR/orchestra.mjs" "$@"
+  if [ "$STRUCTURAL_ONLY" -eq 1 ]; then set -- "$@" --structural; fi
+  if node "$REPO_DIR/orchestra.mjs" "$@"; then
+    SELECTED_HARNESS="$candidate"
+    break
+  fi
+  [ "$HARNESS" = "auto" ] || fail "$candidate is installed but has no executable model route"
+  printf 'WARN: %s was not executable; trying the next configured harness.\n' "$candidate" >&2
+done
+
+if [ -z "$SELECTED_HARNESS" ]; then
+  fail "no authenticated harness worked; sign in to Codex or Claude Code, or connect an OpenCode provider, then run bootstrap again"
 fi
+
+"$SELECTED_HARNESS" --version
+printf 'Harness: %s\n' "$SELECTED_HARNESS"
+
+step "Verifying the installed team"
+set -- doctor --home "$TARGET_HOME" --installed --structural --tool "$SELECTED_HARNESS"
+if [ -n "$PROJECT" ]; then set -- "$@" --project "$PROJECT"; fi
+if [ "$PROJECT_ONLY" -eq 1 ]; then set -- "$@" --project-only; fi
+node "$REPO_DIR/orchestra.mjs" "$@"
 
 printf '\nREADY: agent-orchestra is installed and verified.\n'
 if [ "$NO_LAUNCH" -eq 1 ]; then exit 0; fi
@@ -154,9 +195,9 @@ if [ "$NO_LAUNCH" -eq 1 ]; then exit 0; fi
 launch_dir=${PROJECT:-$REPO_DIR}
 step "Opening the dedicated agent-orchestra Herdr session"
 cd "$launch_dir"
-opencode_binary=$(command -v opencode)
+harness_binary=$(command -v "$SELECTED_HARNESS")
 herdr_config="$RUNTIME_DIR/herdr.toml"
-node -e 'const fs = require("node:fs"); const [file, shell] = process.argv.slice(1); fs.writeFileSync(file, `[terminal]\ndefault_shell = ${JSON.stringify(shell)}\nshell_mode = "non_login"\nnew_cwd = "current"\n`);' "$herdr_config" "$opencode_binary"
+node -e 'const fs = require("node:fs"); const [file, shell] = process.argv.slice(1); fs.writeFileSync(file, `[terminal]\ndefault_shell = ${JSON.stringify(shell)}\nshell_mode = "non_login"\nnew_cwd = "current"\n`);' "$herdr_config" "$harness_binary"
 export HERDR_CONFIG_PATH="$herdr_config"
-export OPENCODE_CONFIG_CONTENT='{"default_agent":"lenka"}'
+if [ "$SELECTED_HARNESS" = "opencode" ]; then export OPENCODE_CONFIG_CONTENT='{"default_agent":"lenka"}'; fi
 exec herdr --session agent-orchestra

@@ -11,10 +11,16 @@
     "runtime": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["primary", "harness", "desktopRequired"],
+      "required": ["primary", "harness", "fallbackOrder", "desktopRequired"],
       "properties": {
         "primary": { "const": "herdr" },
-        "harness": { "const": "opencode" },
+        "harness": { "const": "auto" },
+        "fallbackOrder": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["codex", "claude", "opencode"] },
+          "uniqueItems": true
+        },
         "desktopRequired": { "const": false }
       }
     },

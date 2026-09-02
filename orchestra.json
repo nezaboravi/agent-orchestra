@@ -3,7 +3,8 @@
   "schemaVersion": 1,
   "runtime": {
     "primary": "herdr",
-    "harness": "opencode",
+    "harness": "auto",
+    "fallbackOrder": ["codex", "claude", "opencode"],
     "desktopRequired": false
   },
   "portability": {
@@ -30,12 +31,34 @@
       "testing": "economy",
       "audit": "strongest"
     },
-    "roles": {
-      "dev-lead": ["openai/gpt-5.6-luna", "openai/gpt-5.6-terra", "opencode-go/kimi-k2.7-code"],
-      "dev-planner": ["openai/gpt-5.6-terra", "openai/gpt-5.6-luna", "opencode-go/kimi-k2.7-code"],
-      "dev-builder": ["opencode-go/kimi-k2.7-code", "openai/gpt-5.6-luna", "opencode-go/deepseek-v4-flash"],
-      "dev-tester": ["opencode-go/deepseek-v4-flash", "opencode-go/kimi-k2.7-code", "openai/gpt-5.6-luna"],
-      "dev-auditor": ["openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "opencode-go/kimi-k2.7-code"]
+    "adapters": {
+      "codex": {
+        "roles": {
+          "dev-lead": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"],
+          "dev-planner": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"],
+          "dev-builder": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"],
+          "dev-tester": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"],
+          "dev-auditor": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
+        }
+      },
+      "claude": {
+        "roles": {
+          "dev-lead": ["haiku", "sonnet", "opus"],
+          "dev-planner": ["haiku", "sonnet", "opus"],
+          "dev-builder": ["haiku", "sonnet", "opus"],
+          "dev-tester": ["haiku", "sonnet", "opus"],
+          "dev-auditor": ["haiku", "sonnet", "opus"]
+        }
+      },
+      "opencode": {
+        "roles": {
+          "dev-lead": ["openai/gpt-5.6-luna", "openai/gpt-5.6-terra", "opencode-go/kimi-k2.7-code"],
+          "dev-planner": ["openai/gpt-5.6-terra", "openai/gpt-5.6-luna", "opencode-go/kimi-k2.7-code"],
+          "dev-builder": ["opencode-go/kimi-k2.7-code", "openai/gpt-5.6-luna", "opencode-go/deepseek-v4-flash"],
+          "dev-tester": ["opencode-go/deepseek-v4-flash", "opencode-go/kimi-k2.7-code", "openai/gpt-5.6-luna"],
+          "dev-auditor": ["openai/gpt-5.6-sol", "openai/gpt-5.6-terra", "opencode-go/kimi-k2.7-code"]
+        }
+      }
     }
   },
   "safety": {

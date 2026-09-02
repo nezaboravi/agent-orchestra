@@ -17,8 +17,8 @@ const isWindows = process.platform === 'win32';
 
 const tools = {
   opencode: { command: 'opencode', stable: true, agentPath: ['.config', 'opencode', 'agents'] },
-  claude: { command: 'claude', stable: false, agentPath: ['.claude', 'agents'] },
-  codex: { command: 'codex', stable: false, agentPath: ['.codex', 'agents'] },
+  claude: { command: 'claude', stable: true, agentPath: ['.claude', 'agents'] },
+  codex: { command: 'codex', stable: true, agentPath: ['.codex', 'agents'] },
   cursor: { command: 'cursor', stable: false, agentPath: ['.cursor', 'agents'] },
 };
 
@@ -186,7 +186,7 @@ function allowedPatterns(rule) {
   return Object.entries(rule).filter(([, action]) => action === 'allow').map(([pattern]) => pattern);
 }
 
-function claudeAgent(agent) {
+function claudeAgent(agent, selectedModel = null) {
   const permission = agent.frontmatter.permission;
   const allowed = new Set();
   if (permission !== 'deny') {
@@ -202,15 +202,13 @@ function claudeAgent(agent) {
     }
     if (permission && permission.task !== 'deny') allowed.add('Task');
   }
-  return ['---', `name: ${agent.name}`, `description: ${agent.frontmatter.description || ''}`, 'tools:', ...[...allowed].map((tool) => `  - ${tool}`), '---', '', agent.body, ''].join('\n');
+  const model = selectedModel ? [`model: ${selectedModel}`] : [];
+  return ['---', `name: ${agent.name}`, `description: ${agent.frontmatter.description || ''}`, ...model, 'tools:', ...[...allowed].map((tool) => `  - ${tool}`), '---', '', agent.body, ''].join('\n');
 }
 
-function codexAgent(agent) {
+function codexAgent(agent, selectedModel = null) {
   const permission = agent.frontmatter.permission;
   const readOnly = permission === 'deny' || (permission && typeof permission === 'object' && (permission.edit === 'deny' || permission.write === 'deny'));
-  const selectedModel = typeof agent.frontmatter.model === 'string' && agent.frontmatter.model.startsWith('openai/')
-    ? agent.frontmatter.model.slice('openai/'.length)
-    : null;
   const lines = [
     `name = "${agent.name}"`,
     `description = "${String(agent.frontmatter.description || '').replace(/"/g, "'")}"`,
@@ -233,32 +231,189 @@ function opencodeAgent(agent, selectedModel) {
 
 function convert(agent, tool, selectedModel = null) {
   if (tool === 'opencode') return opencodeAgent(agent, selectedModel);
-  if (tool === 'claude') return claudeAgent(agent);
-  if (tool === 'codex') return codexAgent(agent);
+  if (tool === 'claude') return claudeAgent(agent, selectedModel);
+  if (tool === 'codex') return codexAgent(agent, selectedModel);
   if (tool === 'cursor') return cursorAgent(agent);
   throw new Error(`No converter for ${tool}`);
 }
 
-function modelInventory(home) {
-  const binary = executable('opencode');
-  if (!binary) return [];
-  const targetEnvironment = {
+function targetEnvironment(home) {
+  return {
     ...process.env,
     HOME: home,
     USERPROFILE: home,
     XDG_CONFIG_HOME: path.join(home, '.config'),
+    CODEX_HOME: path.join(home, '.codex'),
   };
-  const result = spawnSync(binary, ['models'], { encoding: 'utf8', timeout: 15000, env: targetEnvironment });
+}
+
+function modelInventory(home, tool = 'opencode') {
+  if (tool === 'codex') return codexModelInventory(home);
+  if (tool === 'claude') return declaredModels('claude');
+  const binary = executable('opencode');
+  if (!binary) return [];
+  const result = spawnSync(binary, ['models'], { encoding: 'utf8', timeout: 15000, env: targetEnvironment(home) });
   if (result.status !== 0) return [];
   return [...new Set(result.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => /^[^\s/]+\/[^\s]+$/.test(line)))];
 }
 
-function resolveModels(inventory) {
+function declaredRoles(tool) {
+  return orchestraConfig.modelPolicy.adapters?.[tool]?.roles || {};
+}
+
+function declaredModels(tool) {
+  return [...new Set(Object.values(declaredRoles(tool)).flat())];
+}
+
+function codexModelInventory(home, runner = spawnSync, binary = executable('codex')) {
+  if (!binary) return [];
+  const result = runner(binary, ['debug', 'models'], { encoding: 'utf8', timeout: 15000, env: targetEnvironment(home) });
+  if (result?.status !== 0) return [];
+  try {
+    const parsed = JSON.parse(result.stdout || '{}');
+    return [...new Set((parsed.models || []).filter((model) => model.visibility !== 'hide').map((model) => model.slug).filter(Boolean))];
+  } catch {
+    return [];
+  }
+}
+
+function resolveModels(inventory, tool = 'opencode') {
   const available = new Set(inventory);
-  return Object.fromEntries(Object.entries(orchestraConfig.modelPolicy.roles).map(([role, candidates]) => [
+  return Object.fromEntries(Object.entries(declaredRoles(tool)).map(([role, candidates]) => [
     role,
     candidates.find((candidate) => available.has(candidate)) || null,
   ]));
+}
+
+function modelProbe(home, model, runner = spawnSync, binary = executable('opencode')) {
+  const marker = 'ORCHESTRA_MODEL_OK';
+  if (!binary) return { model, ok: false, reason: 'OpenCode CLI not found', authFailure: false, tokens: 0, cost: 0 };
+  const workingDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-model-'));
+  const configDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-config-'));
+  const environment = {
+    ...targetEnvironment(home),
+    XDG_CONFIG_HOME: configDirectory,
+    OPENCODE_CONFIG_CONTENT: '{"mcp":{},"instructions":[]}',
+  };
+  let result;
+  try {
+    result = runner(binary, [
+      'run', '--pure', '--format', 'json', '--dir', workingDirectory,
+      '--model', model, `Reply with exactly ${marker}. Do not use tools.`,
+    ], { encoding: 'utf8', timeout: 45000, env: environment });
+  } finally {
+    fs.rmSync(workingDirectory, { recursive: true, force: true });
+    fs.rmSync(configDirectory, { recursive: true, force: true });
+  }
+  const stdout = result?.stdout || '';
+  const stderr = result?.stderr || '';
+  let verified = false;
+  let tokens = 0;
+  let cost = 0;
+  for (const line of stdout.split(/\r?\n/).filter(Boolean)) {
+    try {
+      const event = JSON.parse(line);
+      if (event.type === 'text' && event.part?.text?.trim() === marker) verified = true;
+      if (event.type === 'step_finish') {
+        tokens += Number(event.part?.tokens?.total || 0);
+        cost += Number(event.part?.cost || 0);
+      }
+    } catch {
+      // Non-JSON diagnostics are classified below without echoing provider output.
+    }
+  }
+  const diagnostic = `${stdout}\n${stderr}`;
+  const authFailure = /(?:\b401\b|unauthori[sz]ed|invalid\s+(?:auth(?:entication)?\s+)?token|token\s+(?:is\s+)?invalid)/i.test(diagnostic);
+  if (verified && result?.status === 0) return { model, ok: true, reason: 'verified response', authFailure: false, tokens, cost };
+  if (authFailure) return { model, ok: false, reason: 'HTTP 401 or rejected provider token', authFailure: true, tokens, cost };
+  if (result?.error?.code === 'ETIMEDOUT') return { model, ok: false, reason: 'model probe timed out', authFailure: false, tokens, cost };
+  if (result?.status !== 0) return { model, ok: false, reason: `OpenCode exited with status ${result?.status ?? 'unknown'}`, authFailure: false, tokens, cost };
+  return { model, ok: false, reason: 'empty or unverified model response', authFailure: false, tokens, cost };
+}
+
+function codexModelProbe(home, model, runner = spawnSync, binary = executable('codex')) {
+  const marker = 'ORCHESTRA_CODEX_OK';
+  if (!binary) return { model, ok: false, reason: 'Codex CLI not found', authFailure: false, tokens: 0, cost: 0 };
+  const result = runner(binary, [
+    'exec', '--ephemeral', '--ignore-user-config', '--json', '--skip-git-repo-check',
+    '-C', os.tmpdir(), '--model', model, `Reply with exactly ${marker}. Do not use tools.`,
+  ], { encoding: 'utf8', timeout: 45000, env: targetEnvironment(home), input: '' });
+  let verified = false;
+  let tokens = 0;
+  for (const line of (result?.stdout || '').split(/\r?\n/).filter(Boolean)) {
+    try {
+      const event = JSON.parse(line);
+      if (event.type === 'item.completed' && event.item?.type === 'agent_message' && event.item?.text?.trim() === marker) verified = true;
+      if (event.type === 'turn.completed') tokens += Number(event.usage?.input_tokens || 0) + Number(event.usage?.output_tokens || 0);
+    } catch {
+      // Diagnostics are classified below without exposing credentials.
+    }
+  }
+  const diagnostic = `${result?.stdout || ''}\n${result?.stderr || ''}`;
+  const authFailure = /(?:\b401\b|unauthori[sz]ed|not logged in|invalid\s+(?:auth(?:entication)?\s+)?token|token\s+(?:is\s+)?invalid)/i.test(diagnostic);
+  if (verified && result?.status === 0) return { model, ok: true, reason: 'verified response', authFailure: false, tokens, cost: 0 };
+  if (authFailure) return { model, ok: false, reason: 'Codex authentication rejected', authFailure: true, tokens, cost: 0 };
+  if (result?.error?.code === 'ETIMEDOUT') return { model, ok: false, reason: 'model probe timed out', authFailure: false, tokens, cost: 0 };
+  return { model, ok: false, reason: `Codex returned no verified response${result?.status ? ` (status ${result.status})` : ''}`, authFailure: false, tokens, cost: 0 };
+}
+
+function claudeModelProbe(home, model, runner = spawnSync, binary = executable('claude')) {
+  const marker = 'ORCHESTRA_CLAUDE_OK';
+  if (!binary) return { model, ok: false, reason: 'Claude CLI not found', authFailure: false, tokens: 0, cost: 0 };
+  const result = runner(binary, [
+    '--print', '--model', model, '--output-format', 'json', '--no-session-persistence',
+    `Reply with exactly ${marker}. Do not use tools.`,
+  ], { encoding: 'utf8', timeout: 45000, env: targetEnvironment(home), input: '' });
+  let parsed = {};
+  try { parsed = JSON.parse(result?.stdout || '{}'); } catch { /* Classify below. */ }
+  const text = String(parsed.result || parsed.text || '').trim();
+  const usage = parsed.usage || {};
+  const tokens = Number(usage.input_tokens || 0) + Number(usage.output_tokens || 0);
+  const cost = Number(parsed.total_cost_usd || 0);
+  const diagnostic = `${result?.stdout || ''}\n${result?.stderr || ''}`;
+  const authFailure = /(?:\b401\b|unauthori[sz]ed|not logged in|invalid\s+(?:auth(?:entication)?\s+)?token|token\s+(?:is\s+)?invalid)/i.test(diagnostic);
+  if (text === marker && result?.status === 0) return { model, ok: true, reason: 'verified response', authFailure: false, tokens, cost };
+  if (authFailure) return { model, ok: false, reason: 'Claude authentication rejected', authFailure: true, tokens, cost };
+  if (result?.error?.code === 'ETIMEDOUT') return { model, ok: false, reason: 'model probe timed out', authFailure: false, tokens, cost };
+  return { model, ok: false, reason: `Claude returned no verified response${result?.status ? ` (status ${result.status})` : ''}`, authFailure: false, tokens, cost };
+}
+
+function probeForTool(tool) {
+  if (tool === 'codex') return codexModelProbe;
+  if (tool === 'claude') return claudeModelProbe;
+  return modelProbe;
+}
+
+function resolveExecutableModels(home, inventory, probeModel = modelProbe, tool = 'opencode') {
+  const available = new Set(inventory);
+  const probes = new Map();
+  const blockedProviders = new Set();
+  const routes = {};
+  for (const [role, candidates] of Object.entries(declaredRoles(tool))) {
+    routes[role] = null;
+    for (const candidate of candidates) {
+      if (!available.has(candidate)) continue;
+      const provider = tool === 'opencode' ? candidate.split('/')[0] : tool;
+      if (blockedProviders.has(provider)) continue;
+      if (!probes.has(candidate)) probes.set(candidate, probeModel(home, candidate));
+      const probe = probes.get(candidate);
+      if (probe.authFailure) blockedProviders.add(provider);
+      if (probe.ok) {
+        routes[role] = candidate;
+        break;
+      }
+    }
+  }
+  return { routes, probes: [...probes.values()], blockedProviders: [...blockedProviders] };
+}
+
+function printModelProbes(resolution, tool = 'opencode') {
+  console.log(`INFO ${tool} live model smoke check — ${resolution.probes.length} minimal request(s)`);
+  for (const probe of resolution.probes) console.log(`${probe.ok ? 'PASS' : 'FAIL'} executable model ${probe.model} — ${probe.reason}`);
+  const tokens = resolution.probes.reduce((sum, probe) => sum + probe.tokens, 0);
+  const cost = resolution.probes.reduce((sum, probe) => sum + probe.cost, 0);
+  console.log(`INFO model smoke usage — ${tokens} tokens; $${cost.toFixed(6)}`);
+  for (const provider of resolution.blockedProviders) console.log(`WARN provider ${provider} rejected authentication; remaining ${provider} candidates were skipped`);
 }
 
 function portableFiles(root, excludedPaths = []) {
@@ -299,8 +454,8 @@ function buildPlan(options) {
   const operations = [];
   const warnings = [];
   const agents = agentFiles().map(parseAgent);
-  const resolvedModels = options.resolvedModels || {};
   for (const tool of options.selectedTools) {
+    const resolvedModels = options.resolvedModelsByTool?.[tool] || options.resolvedModels || {};
     if (!options.projectOnly) {
       const globalAgents = path.join(options.home, ...tools[tool].agentPath);
       for (const agent of agents) {
@@ -327,8 +482,11 @@ function buildPlan(options) {
     }
     for (const link of skills.skipped) warnings.push(`Skipped non-portable source: ${repoLabel(link.path)} -> ${link.target}`);
   }
-  for (const [role, selectedModel] of Object.entries(resolvedModels)) {
-    if (!selectedModel) warnings.push(`No available model matched ${role}; it will inherit the OpenCode default`);
+  for (const tool of options.selectedTools) {
+    const resolvedModels = options.resolvedModelsByTool?.[tool] || options.resolvedModels || {};
+    for (const [role, selectedModel] of Object.entries(resolvedModels)) {
+      if (!selectedModel) warnings.push(`No available ${tool} model matched ${role}; it will inherit the harness default`);
+    }
   }
   if (options.project) {
     const projectInstructions = path.join(options.project, 'AGENTS.md');
@@ -473,17 +631,20 @@ function doctor(options) {
     const toolVersion = version(tools[tool].command);
     check(Boolean(toolVersion), `${tool} CLI`, toolVersion || 'not found');
   }
-  if (options.selectedTools.includes('opencode')) {
-    const inventory = modelInventory(options.home);
-    const resolved = resolveModels(inventory);
-    options.resolvedModels = resolved;
+  options.resolvedModelsByTool = {};
+  for (const tool of options.selectedTools.filter((candidate) => Object.keys(declaredRoles(candidate)).length)) {
+    const inventory = options.structural && tool === 'claude' ? declaredModels(tool) : modelInventory(options.home, tool);
+    const resolution = options.structural ? null : resolveExecutableModels(options.home, inventory, probeForTool(tool), tool);
+    const resolved = resolution ? resolution.routes : resolveModels(inventory, tool);
+    options.resolvedModelsByTool[tool] = resolved;
     if (options.structural) {
       const matchedRoutes = Object.values(resolved).filter(Boolean).length;
-      console.log(`INFO OpenCode provider models — ${inventory.length} available; ${matchedRoutes}/${Object.keys(resolved).length} role routes matched`);
+      console.log(`INFO ${tool} model declarations — ${inventory.length} visible; ${matchedRoutes}/${Object.keys(resolved).length} role routes matched`);
     } else {
-      check(inventory.length > 0, 'OpenCode model inventory', inventory.length ? `${inventory.length} models` : 'no authenticated provider models found');
+      check(inventory.length > 0, `${tool} model inventory`, inventory.length ? `${inventory.length} models` : 'no provider models found');
+      printModelProbes(resolution, tool);
       for (const [role, selectedModel] of Object.entries(resolved)) {
-        check(Boolean(selectedModel), `model route ${role}`, selectedModel || 'no candidate available');
+        check(Boolean(selectedModel), `${tool} executable model route ${role}`, selectedModel || 'no working candidate available');
       }
     }
   }
@@ -506,7 +667,18 @@ function doctor(options) {
 function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   if (options.command === 'doctor') return doctor(options);
-  if (options.selectedTools.includes('opencode')) options.resolvedModels = resolveModels(modelInventory(options.home));
+  options.resolvedModelsByTool = {};
+  for (const tool of options.selectedTools.filter((candidate) => Object.keys(declaredRoles(candidate)).length)) {
+    const inventory = options.structural && tool === 'claude' ? declaredModels(tool) : modelInventory(options.home, tool);
+    if (options.structural || options.dryRun) options.resolvedModelsByTool[tool] = resolveModels(inventory, tool);
+    else {
+      const resolution = resolveExecutableModels(options.home, inventory, probeForTool(tool), tool);
+      printModelProbes(resolution, tool);
+      options.resolvedModelsByTool[tool] = resolution.routes;
+      const missing = Object.entries(resolution.routes).filter(([, model]) => !model).map(([role]) => role);
+      if (missing.length) throw new Error(`No executable ${tool} model candidate for: ${missing.join(', ')}`);
+    }
+  }
   const plan = buildPlan(options);
   const items = classify(plan, options.conflict);
   printPlan(items, plan, options);
@@ -524,4 +696,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
 }
 
-export { parseFrontmatter, parseAgent, codexAgent, buildPlan, classify, modelInventory, resolveModels, main };
+export { parseFrontmatter, parseAgent, codexAgent, buildPlan, classify, modelInventory, modelProbe, codexModelInventory, codexModelProbe, claudeModelProbe, resolveModels, resolveExecutableModels, main };

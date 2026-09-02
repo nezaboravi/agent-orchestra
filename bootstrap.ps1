@@ -133,16 +133,17 @@ if ($ProjectOnly) {
     $InstallArgs += "--project-only"
     $DoctorArgs += "--project-only"
 }
+if ($StructuralOnly) { $InstallArgs += "--structural" }
 
 Write-Step "Installing the agent team"
 & $Node (Join-Path $RepoDir "orchestra.mjs") @InstallArgs
 if ($LASTEXITCODE -ne 0) { throw "Agent team installation failed." }
 
-Write-Step "Verifying files and runtime"
-& $Node (Join-Path $RepoDir "orchestra.mjs") @DoctorArgs --structural
-if ($LASTEXITCODE -ne 0) { throw "Structural verification failed." }
-
-if (-not $StructuralOnly) {
+if ($StructuralOnly) {
+    Write-Step "Verifying files and runtime structurally"
+    & $Node (Join-Path $RepoDir "orchestra.mjs") @DoctorArgs --structural
+    if ($LASTEXITCODE -ne 0) { throw "Structural verification failed." }
+} else {
     Write-Step "Verifying authenticated model routes"
     & $Node (Join-Path $RepoDir "orchestra.mjs") @DoctorArgs
     if ($LASTEXITCODE -ne 0) { throw "Model verification failed. Connect an OpenCode provider and run bootstrap.ps1 again." }

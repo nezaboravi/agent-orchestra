@@ -11,7 +11,7 @@ implicit dependency.
    roles, workflow, permissions, model classes, evidence, and escalation.
 3. **Runtime** — Herdr owns persistent terminal sessions and exposes agent
    state and automation primitives.
-4. **Harness** — OpenCode CLI is the first supported coding-agent harness.
+4. **Harness** — Codex, Claude Code, or OpenCode executes the same team rules.
 5. **Proof** — tests, static checks, independent audit, cost records, and the
    project handoff turn activity into verified behavior.
 
@@ -21,7 +21,7 @@ on macOS, Linux, and Windows.
 
 An explicit user instruction to start work authorizes normal team dispatch, so
 the orchestra announces the plan and continues without a redundant approval
-prompt. The unattended OpenCode run may use auto mode, but auto mode is not the safety
+prompt. An unattended harness may use auto mode, but auto mode is not the safety
 boundary. Explicit agent-level denials remain the boundary: destructive Git,
 file deletion, database resets, remote shells, downloads, publishing, and
 external-directory access are denied. Work that genuinely requires one of
@@ -44,16 +44,17 @@ The installer must:
 - preserve project-owned instructions such as Laravel Boost `AGENTS.md`;
 - validate nested permissions before generating another tool's format.
 
-OpenCode is the stable adapter. Claude Code, Codex, and Cursor adapters are
-experimental until their generated output passes a real end-to-end run on the
-corresponding client.
+Codex and Claude Code have authenticated model and generated-format proofs;
+their full team behavior proofs are still pending. Cursor stays experimental
+until its generated output passes a real end-to-end run.
 
-Model names are not assumed to exist on another computer. The installer asks
-that computer's OpenCode CLI for its real model inventory, chooses the first
-available candidate for each role, and writes the resolved model only into the
-generated agent. If no provider models are available, installation can still
-finish, but `doctor` fails with an authentication blocker instead of claiming
-that the team is ready.
+Model names and credentials belong to an adapter. The Unix bootstrap tries the
+declared harness order (`codex`, `claude`, `opencode`) and requires a minimal
+live response before selecting one. Codex uses its ChatGPT sign-in and own model
+catalog; Claude Code uses its own sign-in and starts with Haiku; OpenCode tests its declared provider
+candidates and can fall through from a rejected provider to Kimi. Tokens are
+never copied between authentication stores. A failed candidate is skipped; if
+all candidates fail, installation stops without claiming READY.
 
 ## Cross-machine acceptance test
 

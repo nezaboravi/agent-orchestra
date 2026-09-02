@@ -6,27 +6,27 @@ Homebrew, and a developer's existing shell configuration are not dependencies.
 
 ## Platform entrypoints
 
-| Platform | Entrypoint | Supported architectures | Herdr | OpenCode |
+| Platform | Entrypoint | Supported architectures | Herdr | Harness |
 |---|---|---|---|---|
-| macOS | `./bootstrap.sh` | Apple silicon, Intel | native | native |
-| Linux | `./bootstrap.sh` | aarch64, x86_64 | native | native |
-| Windows | `.\bootstrap.ps1` | x86_64; ARM64 through x86_64 Herdr emulation | native ConPTY | native |
+| macOS | `./bootstrap.sh` | Apple silicon, Intel | native | Codex / Claude / OpenCode auto-selection |
+| Linux | `./bootstrap.sh` | aarch64, x86_64 | native | Codex / Claude / OpenCode auto-selection |
+| Windows | `.\bootstrap.ps1` | x86_64; ARM64 through x86_64 Herdr emulation | native ConPTY | OpenCode (current bootstrap) |
 
 Both entrypoints install runtime files below the selected user's home, prepend
 those paths only for the bootstrap process, install the same agent definitions,
-run structural verification, run authenticated model-route verification, and
-open Lenka in the named `agent-orchestra` Herdr session. Unix bootstrap does not edit
+and open Lenka in the named `agent-orchestra` Herdr session. The Unix bootstrap
+selects Codex, Claude Code, or OpenCode only after a live response. Unix does not edit
 `.zshrc`, `.bashrc`, or profile files. Windows bootstrap also keeps its runtime
 inside the orchestra directory instead of depending on Chocolatey or Scoop.
 
 ## Verification levels
 
 1. **Static** — shell syntax, JavaScript tests, workflow/schema checks.
-2. **Clean runtime** — no Node.js, Herdr, or OpenCode is inherited from the
+2. **Clean runtime** — no Node.js, Herdr, or selected harness is inherited from the
    normal user path; the bootstrap downloads and verifies its own tools.
-3. **Authenticated readiness** — the installed OpenCode account exposes a
-   model for every role and every generated file matches the source.
-4. **Behavior proof** — Herdr and OpenCode execute the same Laravel intent
+3. **Authenticated readiness** — the selected account returns a verified model
+   response for every resolved role and every generated file matches the source.
+4. **Behavior proof** — Herdr and the selected harness execute the same Laravel intent
    through PLAN, BUILD, VERIFY, and PROVE, with usage and handoff evidence.
 
 Passing a lower level never implies a higher one. Provider login is a real

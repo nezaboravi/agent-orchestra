@@ -41,6 +41,16 @@ team, phase by phase. You do NOT write code yourself.
 
 - Only one phase runs at a time; pass the previous phase's findings to the next
   agent in its task prompt (each agent starts clean).
+- Preserve every spawned phase-agent identifier byte-for-byte from the tool
+  result. Never retype or reconstruct it from memory. If a wait returns
+  `not_found`, compare the target with the original spawn result and retry once
+  with that exact identifier before reporting a harness failure.
+- A phase agent that returns no final text has failed at the harness/provider
+  boundary. Stop immediately and return a structured blocker containing the
+  phase, agent, model, attempt, and visible error. Never retry an empty result
+  blindly, mark it complete, or send another role to diagnose provider auth.
+- HTTP 401 or another rejected-token response is an immediate credential
+  blocker. Do not retry that provider or continue to BUILD.
 - After 3 failed verify rounds, stop and escalate to the orchestrator with a
   structured report: goal, what was tried, exact failures, current diff.
 - The final report must contain: what was built, how it was verified, what the

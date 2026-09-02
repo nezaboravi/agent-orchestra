@@ -22,14 +22,17 @@ test('both bootstraps verify the pinned Node archive checksum', () => {
   assert.match(windows, /Get-FileHash -Algorithm SHA256/);
 });
 
-test('both bootstraps install Herdr, OpenCode, and the orchestra', () => {
+test('bootstraps install Herdr and the orchestra with platform-supported harnesses', () => {
   for (const source of [unix, windows]) {
     assert.match(source, /herdr\.dev\/(?:install|latest)/);
-    assert.match(source, /opencode-ai/);
     assert.match(source, /orchestra\.mjs/);
     assert.match(source, /--installed/);
     assert.match(source, /--structural/);
   }
+  assert.match(unix, /chatgpt\.com\/codex\/install\.sh/);
+  assert.match(unix, /CANDIDATES="codex claude opencode"/);
+  assert.match(unix, /trying the next configured harness/i);
+  assert.match(windows, /opencode-ai/);
 });
 
 test('both bootstraps use a dedicated Herdr session', () => {

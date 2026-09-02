@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { buildPlan, classify, codexAgent, main, parseAgent, parseFrontmatter, resolveModels } from '../orchestra.mjs';
+import { buildPlan, classify, codexAgent, codexModelInventory, codexModelProbe, main, modelProbe, parseAgent, parseFrontmatter, resolveExecutableModels, resolveModels } from '../orchestra.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 
@@ -44,6 +44,30 @@ test('Codex conversion keeps auditors read-only and builders writable', () => {
 
   assert.match(codexAgent(auditor), /sandbox_mode = "read-only"/);
   assert.match(codexAgent(builder), /sandbox_mode = "workspace-write"/);
+  assert.match(codexAgent(builder, 'gpt-5.6-luna'), /model = "gpt-5.6-luna"/);
+});
+
+test('Codex inventory and live probe use Codex-native model slugs', () => {
+  const inventoryRunner = () => ({
+    status: 0,
+    stdout: JSON.stringify({ models: [
+      { slug: 'gpt-5.6-luna', visibility: 'list' },
+      { slug: 'hidden-model', visibility: 'hide' },
+    ] }),
+  });
+  assert.deepEqual(codexModelInventory('/fake/home', inventoryRunner, '/fake/codex'), ['gpt-5.6-luna']);
+
+  const probeRunner = () => ({
+    status: 0,
+    stdout: [
+      JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'ORCHESTRA_CODEX_OK' } }),
+      JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 40, output_tokens: 2 } }),
+    ].join('\n'),
+    stderr: '',
+  });
+  const result = codexModelProbe('/fake/home', 'gpt-5.6-luna', probeRunner, '/fake/codex');
+  assert.equal(result.ok, true);
+  assert.equal(result.tokens, 42);
 });
 
 test('unattended builder keeps destructive and external operations denied', () => {
@@ -102,7 +126,7 @@ test('project-only recovery data stays inside the project', () => {
   const home = path.join(root, 'home');
   const project = path.join(root, 'project');
 
-  assert.equal(silently(() => main(['install', '--home', home, '--project', project, '--project-only'])), 0);
+  assert.equal(silently(() => main(['install', '--home', home, '--project', project, '--project-only', '--structural'])), 0);
   assert.equal(fs.existsSync(path.join(home, '.agent-orchestra')), false);
   assert.ok(fs.existsSync(path.join(project, '.agent-orchestra', '.gitignore')));
   assert.ok(fs.existsSync(path.join(project, '.agent-orchestra', 'backups')));
@@ -151,6 +175,63 @@ test('model routing selects real candidates and degrades honestly', () => {
   assert.ok(Object.values(resolveModels([])).every((model) => model === null));
 });
 
+test('model routing is adapter-specific', () => {
+  const codex = resolveModels(['gpt-5.6-luna', 'gpt-5.6-sol'], 'codex');
+  const claude = resolveModels(['haiku', 'sonnet', 'opus'], 'claude');
+
+  assert.equal(codex['dev-lead'], 'gpt-5.6-luna');
+  assert.equal(codex['dev-auditor'], 'gpt-5.6-luna');
+  assert.equal(claude['dev-lead'], 'haiku');
+  assert.equal(claude['dev-auditor'], 'haiku');
+});
+
+test('Lenka primary remains provider-neutral', () => {
+  const lenka = fs.readFileSync(path.join(repoRoot, 'agents', 'lenka.md'), 'utf8');
+  assert.doesNotMatch(lenka, /^model:/m);
+  assert.match(lenka, /Codex, Claude Code, and OpenCode use separate adapter-specific model routes/);
+  assert.match(lenka, /Preserve every spawned agent identifier byte-for-byte/);
+  assert.doesNotMatch(lenka, /create a project-local agent file \(`\.opencode/);
+});
+
+test('live model probe requires a verified text response and records usage', () => {
+  const runner = () => ({
+    status: 0,
+    stdout: [
+      JSON.stringify({ type: 'text', part: { text: 'ORCHESTRA_MODEL_OK' } }),
+      JSON.stringify({ type: 'step_finish', part: { tokens: { total: 42 }, cost: 0.001 } }),
+    ].join('\n'),
+    stderr: '',
+  });
+  const result = modelProbe(os.homedir(), 'provider/model', runner, '/fake/opencode');
+
+  assert.equal(result.ok, true);
+  assert.equal(result.tokens, 42);
+  assert.equal(result.cost, 0.001);
+});
+
+test('live routing blocks a provider after 401 and uses a declared provider fallback', () => {
+  const seen = [];
+  const probe = (_home, model) => {
+    seen.push(model);
+    if (model.startsWith('openai/')) return { model, ok: false, authFailure: true, reason: 'HTTP 401', tokens: 0, cost: 0 };
+    return { model, ok: true, authFailure: false, reason: 'verified response', tokens: 1, cost: 0 };
+  };
+  const inventory = [
+    'openai/gpt-5.6-luna',
+    'openai/gpt-5.6-terra',
+    'openai/gpt-5.6-sol',
+    'opencode-go/kimi-k2.7-code',
+    'opencode-go/deepseek-v4-flash',
+  ];
+  const result = resolveExecutableModels(os.homedir(), inventory, probe);
+
+  assert.equal(result.routes['dev-lead'], 'opencode-go/kimi-k2.7-code');
+  assert.equal(result.routes['dev-planner'], 'opencode-go/kimi-k2.7-code');
+  assert.equal(result.routes['dev-auditor'], 'opencode-go/kimi-k2.7-code');
+  assert.equal(seen.filter((model) => model.startsWith('openai/')).length, 1);
+  assert.deepEqual(result.blockedProviders, ['openai']);
+});
+
 test('resolved models are written only into generated role agents', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-models-'));
   const plan = buildPlan({
@@ -175,7 +256,7 @@ test('clean-room install is repeatable and creates a recovery manifest', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-install-'));
   const home = path.join(root, 'home');
   const project = path.join(root, 'project');
-  const args = ['install', '--home', home, '--project', project];
+  const args = ['install', '--home', home, '--project', project, '--structural'];
 
   assert.equal(silently(() => main(args)), 0);
   assert.ok(fs.existsSync(path.join(home, '.config', 'opencode', 'agents', 'dev-lead.md')));
@@ -197,7 +278,7 @@ test('default conflict policy refuses every write transactionally', () => {
   fs.mkdirSync(path.dirname(personaPath), { recursive: true });
   fs.writeFileSync(personaPath, 'existing personal configuration\n');
 
-  assert.equal(silently(() => main(['install', '--home', home])), 2);
+  assert.equal(silently(() => main(['install', '--home', home, '--structural'])), 2);
   assert.equal(fs.readFileSync(personaPath, 'utf8'), 'existing personal configuration\n');
   assert.equal(fs.existsSync(path.join(home, '.config', 'opencode', 'agents', 'dev-lead.md')), false);
 });
@@ -223,7 +304,7 @@ test('existing persona symlinks are protected under every conflict policy', () =
   fs.writeFileSync(canonical, 'canonical personality\n');
   fs.symlinkSync(canonical, personaPath);
 
-  assert.equal(silently(() => main(['install', '--home', home, '--conflict', 'backup'])), 0);
+  assert.equal(silently(() => main(['install', '--home', home, '--conflict', 'backup', '--structural'])), 0);
   assert.equal(fs.lstatSync(personaPath).isSymbolicLink(), true);
   assert.equal(fs.readlinkSync(personaPath), canonical);
   assert.equal(fs.readFileSync(canonical, 'utf8'), 'canonical personality\n');
@@ -236,7 +317,7 @@ test('backup conflict policy preserves replaced content', () => {
   fs.mkdirSync(path.dirname(personaPath), { recursive: true });
   fs.writeFileSync(personaPath, 'configuration before orchestra\n');
 
-  assert.equal(silently(() => main(['install', '--home', home, '--conflict', 'backup'])), 0);
+  assert.equal(silently(() => main(['install', '--home', home, '--conflict', 'backup', '--structural'])), 0);
   const backupRoot = path.join(home, '.agent-orchestra', 'backups');
   const manifests = fs.readdirSync(backupRoot).map((directory) => path.join(backupRoot, directory, 'manifest.json'));
   const manifest = JSON.parse(fs.readFileSync(manifests[0], 'utf8'));
