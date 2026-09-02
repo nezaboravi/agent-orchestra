@@ -1,7 +1,11 @@
 {
   "name": "agent-orchestra",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "lenka": "./lenka.mjs"
+  },
   "scripts": {
     "bootstrap:check": "node --test tests/bootstrap.test.mjs",
     "doctor": "node orchestra.mjs doctor",

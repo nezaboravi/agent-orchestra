@@ -118,6 +118,12 @@ $Herdr = (Get-Command herdr.exe).Source
 $OpenCodeCommand = Get-Command opencode.exe -ErrorAction SilentlyContinue
 if ($null -eq $OpenCodeCommand) { $OpenCodeCommand = Get-Command opencode.cmd -ErrorAction Stop }
 
+if ($env:LENKA_CLI_ACTIVE -ne "1" -and (Test-Path -LiteralPath (Join-Path $RepoDir ".git") -PathType Container)) {
+    Write-Step "Installing the Lenka command"
+    & npm.cmd install --global --prefix (Join-Path $TargetHome ".local") $RepoDir
+    if ($LASTEXITCODE -ne 0) { throw "Lenka command installation failed." }
+}
+
 Write-Step "Detected tools"
 & $Node --version
 & $Herdr --version
@@ -154,6 +160,20 @@ if ($NoLaunch) { exit 0 }
 
 $LaunchDir = if ([string]::IsNullOrWhiteSpace($Project)) { $RepoDir } else { $Project }
 Set-Location -LiteralPath $LaunchDir
+$OpenCodePrimaryModel = ""
+if (-not [string]::IsNullOrWhiteSpace($Project)) {
+    $RuntimeManifest = Join-Path $Project ".agent-orchestra\runtime\opencode.json"
+} else {
+    $RuntimeManifest = Join-Path $TargetHome ".agent-orchestra\runtime\opencode.json"
+}
+if (-not (Test-Path -LiteralPath $RuntimeManifest -PathType Leaf)) {
+    throw "OpenCode runtime manifest is missing: $RuntimeManifest"
+}
+$RuntimeRouting = Get-Content -LiteralPath $RuntimeManifest -Raw | ConvertFrom-Json
+$OpenCodePrimaryModel = [string]$RuntimeRouting.primary.model
+if ([string]::IsNullOrWhiteSpace($OpenCodePrimaryModel)) {
+    throw "No verified OpenCode coordination model was recorded for Lenka."
+}
 Write-Step "Opening the dedicated agent-orchestra Herdr session"
 $OpenCodeExe = Join-Path $NpmPrefix "node_modules\opencode-ai\bin\opencode.exe"
 if (-not (Test-Path -LiteralPath $OpenCodeExe -PathType Leaf)) {
@@ -180,5 +200,5 @@ new_cwd = "current"
 $Utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
 [System.IO.File]::WriteAllText($HerdrConfig, $HerdrConfigContent, $Utf8WithoutBom)
 $env:HERDR_CONFIG_PATH = $HerdrConfig
-$env:OPENCODE_CONFIG_CONTENT = '{"default_agent":"lenka"}'
+$env:OPENCODE_CONFIG_CONTENT = @{ default_agent = "lenka"; model = $OpenCodePrimaryModel } | ConvertTo-Json -Compress
 & $Herdr --session agent-orchestra

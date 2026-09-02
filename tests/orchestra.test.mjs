@@ -352,6 +352,11 @@ test('project runtime manifest gives Lenka exact adapter-local routes without cr
   }));
 
   assert.equal(manifest.harness, 'opencode');
+  assert.deepEqual(manifest.primary, {
+    role: 'coordination',
+    modelClass: 'mid',
+    model: 'openai/gpt-5.6-terra',
+  });
   assert.deepEqual(manifest.profiles['project-read'], {
     permissionEnvelope: 'explorer',
     modelClass: 'economy',
@@ -381,6 +386,7 @@ test('project plan installs one ignored runtime manifest per selected harness', 
   const codex = plan.operations.find((operation) => operation.target === path.join(project, '.agent-orchestra', 'runtime', 'codex.json'));
   assert.equal(JSON.parse(opencode.content).profiles['project-read'].model, 'opencode-go/kimi-k2.7-code');
   assert.equal(JSON.parse(codex.content).profiles['project-read'].model, 'gpt-5.6-luna');
+  assert.equal(JSON.parse(codex.content).primary.model, null);
 });
 
 test('doctor does not call a CLI-only clean room ready without models', () => {

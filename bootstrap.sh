@@ -140,6 +140,10 @@ claude_authenticated() {
 step "Preparing portable runtime"
 install_node
 install_herdr
+if [ "${LENKA_CLI_ACTIVE:-0}" != "1" ] && [ -d "$REPO_DIR/.git" ]; then
+  step "Installing the Lenka command"
+  npm install --global --prefix "$TARGET_HOME/.local" "$REPO_DIR"
+fi
 
 case "$HARNESS" in
   codex) install_codex ;;
@@ -198,11 +202,22 @@ printf '\nREADY: agent-orchestra is installed and verified.\n'
 if [ "$NO_LAUNCH" -eq 1 ]; then exit 0; fi
 
 launch_dir=${PROJECT:-$REPO_DIR}
+if [ -n "$PROJECT" ]; then
+  runtime_manifest="$PROJECT/.agent-orchestra/runtime/$SELECTED_HARNESS.json"
+else
+  runtime_manifest="$TARGET_HOME/.agent-orchestra/runtime/$SELECTED_HARNESS.json"
+fi
+[ -f "$runtime_manifest" ] || fail "$SELECTED_HARNESS runtime manifest is missing: $runtime_manifest"
+primary_model=$(node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(manifest.primary?.model || "");' "$runtime_manifest")
+[ -n "$primary_model" ] || fail "No verified $SELECTED_HARNESS coordination model was recorded for Lenka"
+printf 'Conductor model: %s\n' "$primary_model"
 step "Opening the dedicated agent-orchestra Herdr session"
 cd "$launch_dir"
 harness_binary=$(command -v "$SELECTED_HARNESS")
 herdr_config="$RUNTIME_DIR/herdr.toml"
-node -e 'const fs = require("node:fs"); const [file, shell] = process.argv.slice(1); fs.writeFileSync(file, `[terminal]\ndefault_shell = ${JSON.stringify(shell)}\nshell_mode = "non_login"\nnew_cwd = "current"\n`);' "$herdr_config" "$harness_binary"
+node -e 'const fs = require("node:fs"); const [file, shell] = process.argv.slice(1); fs.writeFileSync(file, `[terminal]\ndefault_shell = ${JSON.stringify(shell)}\nshell_mode = "non_login"\nnew_cwd = "current"\n`);' "$herdr_config" "$REPO_DIR/harness-launcher.mjs"
 export HERDR_CONFIG_PATH="$herdr_config"
-if [ "$SELECTED_HARNESS" = "opencode" ]; then export OPENCODE_CONFIG_CONTENT='{"default_agent":"lenka"}'; fi
+export AGENT_ORCHESTRA_HARNESS="$SELECTED_HARNESS"
+export AGENT_ORCHESTRA_HARNESS_BINARY="$harness_binary"
+export AGENT_ORCHESTRA_PRIMARY_MODEL="$primary_model"
 exec herdr --session agent-orchestra

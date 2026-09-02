@@ -38,8 +38,11 @@ test('bootstraps install Herdr and the orchestra with platform-supported harness
 test('both bootstraps use a dedicated Herdr session', () => {
   assert.match(unix, /herdr --session agent-orchestra/);
   assert.match(windows, /--session agent-orchestra/);
-  assert.match(unix, /OPENCODE_CONFIG_CONTENT='\{"default_agent":"lenka"\}'/);
-  assert.match(windows, /OPENCODE_CONFIG_CONTENT = '\{"default_agent":"lenka"\}'/);
+  assert.match(windows, /default_agent = "lenka"; model = \$OpenCodePrimaryModel/);
+  assert.match(unix, /runtime\/\$SELECTED_HARNESS\.json/);
+  assert.match(windows, /runtime\\opencode\.json/);
+  assert.match(unix, /AGENT_ORCHESTRA_PRIMARY_MODEL/);
+  assert.match(unix, /harness-launcher\.mjs/);
   assert.match(unix, /default_shell/);
   assert.match(windows, /default_shell/);
 });

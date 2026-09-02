@@ -512,6 +512,7 @@ function selectedAgentModel(agentName, resolvedRoles = {}, resolvedFactory = {})
 
 function runtimeManifest(tool, resolvedFactoryModels = {}) {
   const factory = orchestraConfig.agentFactory || {};
+  const primaryModelClass = orchestraConfig.modelPolicy?.classes?.coordination || 'mid';
   const profiles = Object.fromEntries(Object.entries(factory.profiles || {}).map(([name, profile]) => [name, {
     permissionEnvelope: profile.template,
     modelClass: profile.modelClass,
@@ -525,6 +526,11 @@ function runtimeManifest(tool, resolvedFactoryModels = {}) {
     harness: tool,
     lifecycle: factory.lifecycle,
     unknownCapabilityPolicy: factory.unknownCapabilityPolicy,
+    primary: {
+      role: 'coordination',
+      modelClass: primaryModelClass,
+      model: resolvedFactoryModels[primaryModelClass] || null,
+    },
     profiles,
   }, null, 2)}\n`;
 }
@@ -547,6 +553,11 @@ function buildPlan(options) {
         ? `---\ndescription: Lenka orchestrator persona\nalwaysApply: true\n---\n\n${persona}`
         : persona;
       operations.push({ target: personaTarget(tool, options.home), content: personaContent, kind: `${tool} persona` });
+      operations.push({
+        target: path.join(options.home, '.agent-orchestra', 'runtime', `${tool}.json`),
+        content: runtimeManifest(tool, resolvedFactoryModels),
+        kind: `${tool} global runtime manifest`,
+      });
     }
     if (options.project) {
       const projectAgents = path.join(options.project, `.${tool}`, 'agents');

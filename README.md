@@ -28,6 +28,29 @@ verifies a real model response, and opens Lenka directly inside a dedicated
 It does not depend on Homebrew, Laravel Herd, a particular username, or a
 machine-specific project directory.
 
+After the first bootstrap, the same repository installs a small `lenka`
+command into the user's local executable directory. From any project:
+
+```sh
+lenka up
+lenka up codex
+lenka up claude
+lenka up opencode
+lenka up --ask
+lenka status
+lenka doctor
+```
+
+`lenka up` auto-detects an authenticated harness. An explicit harness keeps
+all routing inside that service. The conductor uses the verified `mid`
+coordination model; one-run workers independently use economy, mid, or
+strongest routes according to their capability profile.
+
+Native Windows currently supports `lenka up` through OpenCode. Codex and
+Claude selection through the Lenka command is implemented for macOS and Linux;
+their complete orchestration behavior proof remains pending. Windows
+multi-harness selection remains a later portability phase.
+
 macOS or Linux:
 
 ```sh
