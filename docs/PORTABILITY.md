@@ -37,9 +37,10 @@ unannounced free model.
 
 `.github/workflows/portable-bootstrap.yml` runs the project-only bootstrap on
 GitHub-hosted macOS, Ubuntu, and Windows machines. It uses structural mode
-because CI does not receive private provider credentials. A release is not
-called cross-platform ready until this matrix passes and authenticated physical
-machine proofs are recorded separately.
+because CI does not receive private provider credentials. The matrix passed on
+all three platforms in [run 33591218715](https://github.com/nezaboravi/agent-orchestra/actions/runs/33591218715)
+on 2026-09-02. Authenticated physical-machine proofs remain a separate,
+higher-level requirement.
 
 ## Current local evidence
 
@@ -50,6 +51,13 @@ On 2026-09-01 the macOS Apple-silicon path passed both:
 - an authenticated project-only bootstrap with 48 inventoried models, all five
   role routes resolved, and 22/22 managed project files matching.
 
-Linux and Windows scripts and CI jobs exist, but their CI results are pending
-until this branch is pushed. They must not be described as runtime-verified
-before those jobs pass.
+On 2026-09-02 the GitHub-hosted structural bootstrap passed on macOS, Ubuntu
+Linux, and native Windows. The first two Windows attempts exposed and fixed two
+real portability defects: line-ending-sensitive tests and a Git symlink that
+materializes as a plain file on Windows. The final matrix exercised the actual
+PowerShell bootstrap successfully, not only static tests.
+
+This proves clean structural installation on the hosted runners. It does not
+claim authenticated model routing or real project behavior on Vladimir's
+physical Linux and Windows computers; those proofs still need their local
+credentials and projects.
