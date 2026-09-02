@@ -183,8 +183,13 @@ fi
 "$SELECTED_HARNESS" --version
 printf 'Harness: %s\n' "$SELECTED_HARNESS"
 
-step "Verifying the installed team"
-set -- doctor --home "$TARGET_HOME" --installed --structural --tool "$SELECTED_HARNESS"
+if [ "$STRUCTURAL_ONLY" -eq 1 ]; then
+  step "Verifying the installed team structurally"
+  set -- doctor --home "$TARGET_HOME" --installed --structural --tool "$SELECTED_HARNESS"
+else
+  step "Verifying the installed team with authenticated model routes"
+  set -- doctor --home "$TARGET_HOME" --installed --tool "$SELECTED_HARNESS"
+fi
 if [ -n "$PROJECT" ]; then set -- "$@" --project "$PROJECT"; fi
 if [ "$PROJECT_ONLY" -eq 1 ]; then set -- "$@" --project-only; fi
 node "$REPO_DIR/orchestra.mjs" "$@"

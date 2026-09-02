@@ -47,3 +47,8 @@ test('both bootstraps use a dedicated Herdr session', () => {
 test('Unix bootstrap does not modify shell startup files', () => {
   assert.doesNotMatch(unix, /\.zshrc|\.bashrc|profile/);
 });
+
+test('Unix bootstrap verifies installed live routes with the same authenticated policy', () => {
+  assert.match(unix, /if \[ "\$STRUCTURAL_ONLY" -eq 1 \]; then\n  step "Verifying the installed team structurally"/);
+  assert.match(unix, /else\n  step "Verifying the installed team with authenticated model routes"\n  set -- doctor --home "\$TARGET_HOME" --installed --tool "\$SELECTED_HARNESS"/);
+});
