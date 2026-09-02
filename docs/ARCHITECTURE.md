@@ -15,6 +15,34 @@ implicit dependency.
 5. **Proof** — tests, static checks, independent audit, cost records, and the
    project handoff turn activity into verified behavior.
 
+## Dynamic agent factory
+
+An agent has two separate parts:
+
+1. **Ephemeral role charter** — a one-run identity, one outcome, model class,
+   forbidden adjacent work, evidence contract, and lifecycle.
+2. **Durable permission envelope** — an audited harness definition that grants
+   only a known capability such as project read, project write, verification,
+   Taskavel, or browser operation.
+
+Lenka creates the first part for every non-trivial delegation and selects the
+narrowest second part that can complete it. Installed names such as `explorer`
+and `implementer` are therefore security profiles, not required members of a
+fixed team. If no exact envelope exists, dispatch fails closed; a broader
+profile is never an implicit fallback.
+
+Model choice happens after permission choice. Each adapter declares ordered
+`economy`, `mid`, and `strongest` candidates. The first live authenticated
+candidate capable of the role is used. Project and external writes always
+produce a second, read-only proof task, and the final report records the real
+model, result, verification, tokens, and cost available from the harness.
+
+Each project install materializes that adapter decision in
+`.agent-orchestra/runtime/<harness>.json`. This ignored manifest contains no
+credentials. It prevents the primary orchestrator from spending tokens on
+model inventory and agent-definition discovery during ordinary work; route
+probing remains an installer and doctor responsibility.
+
 Desktop clients are optional views and manual workspaces. The autonomous path
 must work without a desktop application so the same repository can be tested
 on macOS, Linux, and Windows.

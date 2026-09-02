@@ -4,7 +4,7 @@
   "title": "agent-orchestra configuration",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "runtime", "portability", "team", "modelPolicy", "safety", "evidence"],
+  "required": ["schemaVersion", "runtime", "portability", "team", "agentFactory", "modelPolicy", "safety", "evidence"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": 1 },
@@ -53,6 +53,33 @@
             "properties": {
               "phase": { "enum": ["plan", "build", "verify", "prove"] },
               "role": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "agentFactory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "lifecycle", "unknownCapabilityPolicy", "requireExactPermissionEnvelope", "requireIndependentProofAfterWrites", "profiles"],
+      "properties": {
+        "enabled": { "const": true },
+        "lifecycle": { "const": "one-run" },
+        "unknownCapabilityPolicy": { "const": "fail-closed" },
+        "requireExactPermissionEnvelope": { "const": true },
+        "requireIndependentProofAfterWrites": { "const": true },
+        "profiles": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["template", "modelClass", "writes", "externalWrites"],
+            "properties": {
+              "template": { "type": "string", "minLength": 1 },
+              "modelClass": { "enum": ["economy", "mid", "strongest"] },
+              "writes": { "type": "boolean" },
+              "externalWrites": { "type": "boolean" }
             }
           }
         }

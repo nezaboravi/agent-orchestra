@@ -4,6 +4,21 @@ One source of truth (OpenCode-format markdown in `agents/` and `teams/`) is
 installed by `orchestra.mjs`. Codex, Claude Code, and OpenCode have independent
 model routes and credentials.
 
+These files are durable permission envelopes. Lenka creates one-run specialist
+roles at dispatch time by combining an outcome charter, one envelope, and one
+live adapter-specific model. A file name is not a permanent team member.
+
+## Runtime routing manifest
+
+- Location: `.agent-orchestra/runtime/<harness>.json`
+- Generated per project after live installer probes; ignored by Git
+- Contains: harness, lifecycle, fail-closed policy, capability profile,
+  permission envelope, model class, selected live model, write flags, and
+  independent-proof requirement
+- Never contains provider credentials, tokens, or copied authentication state
+- Lenka reads this file directly and does not repeat model discovery during a
+  task
+
 ## OpenCode
 
 - Location: `~/.config/opencode/agents/*.md` (global), `.opencode/agents/` (project)

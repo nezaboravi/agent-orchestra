@@ -6,12 +6,12 @@ Code, and OpenCode have provider-neutral adapters behind the same team rules.
 
 ## What you get
 
-- **Lenka** — the orchestrator persona. She recognizes the domain of your
-  request, calls the right team — or creates a new one on the fly (least
-  privilege, plan → execute → verify → prove).
-- **14 core agents** — explorer, implementer, verifier, reviewer, debugger,
-  browser-ops, frontend-qa, task-manager, vision, handoff, and more — each
-  with one role and the least possible power.
+- **Lenka** — the orchestrator persona. She turns each delegated outcome into
+  a new one-run specialist, chooses the cheapest verified capable model, gives
+  it the narrowest permission envelope, and requires evidence.
+- **Audited permission envelopes** — explorer, implementer, verifier,
+  browser-ops, task-manager, and the other installed definitions are reusable
+  security boundaries, not a fixed workforce the human has to assemble.
 - **Band teams** — domain teams with their own flow:
   - `dev` — dev-lead, dev-planner, dev-ticketer, dev-dag, dev-builder,
     dev-tester, dev-auditor (plan → Taskavel tickets → DAG → build → prove)
@@ -90,6 +90,11 @@ Windows PowerShell:
 
 Project-only mode leaves global agent and persona configuration untouched. It
 also preserves an existing project `AGENTS.md`, including Laravel Boost rules.
+It writes an ignored, credential-free routing map to
+`.agent-orchestra/runtime/<harness>.json`. Lenka reads that single file before
+delegation instead of scanning the project, global configuration, or provider
+credentials. The map names the exact permission envelope and live model
+selected for every factory profile on that machine.
 
 ## Inspect the installer manually
 
@@ -157,6 +162,24 @@ The orchestra announces the selected roles and models, then continues without
 another approval prompt. Destructive operations and external writes still stop
 at a fresh human-approval boundary.
 
+## Dynamic agent factory
+
+The human describes the outcome; Lenka constructs the team. Before a
+non-trivial delegation she creates an internal charter containing a one-run
+agent name, one goal, the minimum capability profile, the cheapest live model
+class capable of the work, forbidden adjacent actions, and required evidence.
+
+The durable profiles in `orchestra.json` are permission envelopes. A new
+specialist may use the read-only `explorer` envelope, for example, without
+becoming "the explorer" as a permanent team member. Project and external
+writes require a separate read-only proof. Unknown capabilities fail closed;
+Lenka must never widen permissions merely to keep a workflow moving.
+
+This distinction keeps the orchestra dynamic without asking a language model
+to improvise security policy. Model routes remain adapter-specific and are
+live-probed, so an unavailable or unauthorized provider falls through to the
+next declared candidate.
+
 ## Configuration model
 
 - **Rules are portable** — repository files are the source of truth.
@@ -167,6 +190,8 @@ at a fresh human-approval boundary.
 - **Models are adapter-specific** — Codex, Claude, and OpenCode never share
   credentials or model identifiers. Availability is checked with a real
   response, and actual usage is reported after the run.
+- **Roles are ephemeral** — Lenka creates them for one outcome; reusable agent
+  files provide tested permission envelopes rather than a fixed org chart.
 
 ## See also
 

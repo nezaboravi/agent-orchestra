@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { buildPlan, classify, codexAgent, codexModelInventory, codexModelProbe, main, modelProbe, parseAgent, parseFrontmatter, resolveExecutableModels, resolveModels } from '../orchestra.mjs';
+import { buildPlan, classify, codexAgent, codexModelInventory, codexModelProbe, createAgentCharter, main, modelProbe, parseAgent, parseFrontmatter, resolveExecutableFactoryModels, resolveExecutableModels, resolveFactoryModels, resolveModels, runtimeManifest } from '../orchestra.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 
@@ -185,12 +185,92 @@ test('model routing is adapter-specific', () => {
   assert.equal(claude['dev-auditor'], 'haiku');
 });
 
+test('dynamic model classes are adapter-specific and ordered by cost policy', () => {
+  const codex = resolveFactoryModels(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'], 'codex');
+  const claude = resolveFactoryModels(['opus', 'sonnet', 'haiku'], 'claude');
+  const opencode = resolveFactoryModels(['opencode-go/deepseek-v4-flash', 'opencode-go/kimi-k2.7-code'], 'opencode');
+
+  assert.deepEqual(codex, { economy: 'gpt-5.6-luna', mid: 'gpt-5.6-terra', strongest: 'gpt-5.6-sol' });
+  assert.deepEqual(claude, { economy: 'haiku', mid: 'sonnet', strongest: 'opus' });
+  assert.equal(opencode.economy, 'opencode-go/kimi-k2.7-code');
+});
+
+test('agent factory creates a one-run charter from the narrowest declared envelope', () => {
+  const charter = createAgentCharter({
+    goal: 'Inspect the recipe migration and report its fields',
+    capability: 'project-read',
+    evidence: ['Cite the migration path and field names'],
+  }, 'codex', { economy: 'gpt-5.6-luna' });
+
+  assert.match(charter.name, /^orchestra-inspect-the-recipe-migration-and-rep-[a-f0-9]{8}$/);
+  assert.equal(charter.lifecycle, 'one-run');
+  assert.equal(charter.permissionEnvelope, 'explorer');
+  assert.equal(charter.modelClass, 'economy');
+  assert.equal(charter.model, 'gpt-5.6-luna');
+  assert.equal(charter.writes, false);
+  assert.equal(charter.independentProofRequired, false);
+  assert.deepEqual(charter.evidence, ['Cite the migration path and field names']);
+});
+
+test('agent factory requires independent proof after project writes', () => {
+  const charter = createAgentCharter({
+    goal: 'Implement recipe CRUD',
+    capability: 'project-write',
+  }, 'claude', { mid: 'sonnet' });
+
+  assert.equal(charter.permissionEnvelope, 'dev-builder');
+  assert.equal(charter.independentProofRequired, true);
+});
+
+test('agent factory fails closed for unknown capabilities and unauthorized external writes', () => {
+  assert.throws(
+    () => createAgentCharter({ goal: 'Provision infrastructure', capability: 'cloud-admin' }, 'codex', { economy: 'gpt-5.6-luna' }),
+    /No exact permission envelope exists/,
+  );
+  assert.throws(
+    () => createAgentCharter({ goal: 'Create a Taskavel project', capability: 'taskavel' }, 'codex', { economy: 'gpt-5.6-luna' }),
+    /requires explicit authorization/,
+  );
+
+  const authorized = createAgentCharter({
+    goal: 'Create a Taskavel project',
+    capability: 'taskavel',
+    externalWriteAuthorized: true,
+  }, 'codex', { economy: 'gpt-5.6-luna' });
+  assert.equal(authorized.externalWrites, true);
+  assert.equal(authorized.independentProofRequired, true);
+});
+
+test('live dynamic routing uses a verified fallback after an authentication failure', () => {
+  const seen = [];
+  const probe = (_home, model) => {
+    seen.push(model);
+    if (model.startsWith('opencode-go/')) return { model, ok: false, authFailure: true, reason: 'HTTP 401', tokens: 0, cost: 0 };
+    return { model, ok: true, authFailure: false, reason: 'verified response', tokens: 1, cost: 0 };
+  };
+  const inventory = ['opencode-go/kimi-k2.7-code', 'opencode-go/deepseek-v4-flash', 'openai/gpt-5.6-luna', 'openai/gpt-5.6-terra', 'openai/gpt-5.6-sol'];
+  const result = resolveExecutableFactoryModels('/fake/home', inventory, probe, 'opencode');
+
+  assert.equal(result.routes.economy, 'openai/gpt-5.6-luna');
+  assert.equal(result.routes.mid, 'openai/gpt-5.6-luna');
+  assert.equal(result.routes.strongest, 'openai/gpt-5.6-sol');
+  assert.equal(seen.filter((model) => model.startsWith('opencode-go/')).length, 1);
+});
+
 test('Lenka primary remains provider-neutral', () => {
   const lenka = fs.readFileSync(path.join(repoRoot, 'agents', 'lenka.md'), 'utf8');
+  const parsed = parseAgent(path.join(repoRoot, 'agents', 'lenka.md'));
   assert.doesNotMatch(lenka, /^model:/m);
   assert.match(lenka, /Codex, Claude Code, and OpenCode use separate adapter-specific model routes/);
   assert.match(lenka, /Preserve every spawned agent identifier byte-for-byte/);
+  assert.match(lenka, /Dynamic agent factory protocol/);
+  assert.match(lenka, /Never ask the human to author this agent/);
+  assert.match(lenka, /separate read-only\s+verifier/);
   assert.doesNotMatch(lenka, /create a project-local agent file \(`\.opencode/);
+  assert.equal(parsed.frontmatter.permission.read['*'], 'deny');
+  assert.equal(parsed.frontmatter.permission.read['.agent-orchestra/runtime/*.json'], 'allow');
+  assert.equal(parsed.frontmatter.permission.glob, 'deny');
+  assert.equal(parsed.frontmatter.permission.grep, 'deny');
 });
 
 test('live model probe requires a verified text response and records usage', () => {
@@ -245,6 +325,62 @@ test('resolved models are written only into generated role agents', () => {
 
   assert.match(lead.content, /^model: openai\/gpt-5\.6-luna$/m);
   assert.doesNotMatch(planner.content, /^model:/m);
+});
+
+test('dynamic permission envelopes receive the live factory model instead of a source pin', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-factory-models-'));
+  const plan = buildPlan({
+    selectedTools: ['opencode'],
+    home: path.join(root, 'home'),
+    project: null,
+    resolvedModels: {},
+    resolvedFactoryModels: { economy: 'opencode-go/kimi-k2.7-code', mid: 'openai/gpt-5.6-terra' },
+  });
+  const explorer = plan.operations.find((operation) => operation.target.endsWith(`${path.sep}explorer.md`));
+  const builder = plan.operations.find((operation) => operation.target.endsWith(`${path.sep}dev-builder.md`));
+
+  assert.match(explorer.content, /^model: opencode-go\/kimi-k2\.7-code$/m);
+  assert.match(builder.content, /^model: openai\/gpt-5\.6-terra$/m);
+  assert.doesNotMatch(explorer.content, /^model: opencode-go\/deepseek-v4-flash$/m);
+});
+
+test('project runtime manifest gives Lenka exact adapter-local routes without credentials', () => {
+  const manifest = JSON.parse(runtimeManifest('opencode', {
+    economy: 'opencode-go/kimi-k2.7-code',
+    mid: 'openai/gpt-5.6-terra',
+    strongest: 'openai/gpt-5.6-sol',
+  }));
+
+  assert.equal(manifest.harness, 'opencode');
+  assert.deepEqual(manifest.profiles['project-read'], {
+    permissionEnvelope: 'explorer',
+    modelClass: 'economy',
+    model: 'opencode-go/kimi-k2.7-code',
+    writes: false,
+    externalWrites: false,
+    independentProofRequired: false,
+  });
+  assert.equal(JSON.stringify(manifest).match(/token|secret|credential/gi), null);
+});
+
+test('project plan installs one ignored runtime manifest per selected harness', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-runtime-'));
+  const project = path.join(root, 'project');
+  const plan = buildPlan({
+    selectedTools: ['opencode', 'codex'],
+    home: path.join(root, 'home'),
+    project,
+    projectOnly: true,
+    resolvedFactoryModelsByTool: {
+      opencode: { economy: 'opencode-go/kimi-k2.7-code' },
+      codex: { economy: 'gpt-5.6-luna' },
+    },
+  });
+
+  const opencode = plan.operations.find((operation) => operation.target === path.join(project, '.agent-orchestra', 'runtime', 'opencode.json'));
+  const codex = plan.operations.find((operation) => operation.target === path.join(project, '.agent-orchestra', 'runtime', 'codex.json'));
+  assert.equal(JSON.parse(opencode.content).profiles['project-read'].model, 'opencode-go/kimi-k2.7-code');
+  assert.equal(JSON.parse(codex.content).profiles['project-read'].model, 'gpt-5.6-luna');
 });
 
 test('doctor does not call a CLI-only clean room ready without models', () => {

@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -261,6 +262,10 @@ function declaredRoles(tool) {
   return orchestraConfig.modelPolicy.adapters?.[tool]?.roles || {};
 }
 
+function declaredClasses(tool) {
+  return orchestraConfig.modelPolicy.adapters?.[tool]?.classes || {};
+}
+
 function declaredModels(tool) {
   return [...new Set(Object.values(declaredRoles(tool)).flat())];
 }
@@ -283,6 +288,47 @@ function resolveModels(inventory, tool = 'opencode') {
     role,
     candidates.find((candidate) => available.has(candidate)) || null,
   ]));
+}
+
+function resolveFactoryModels(inventory, tool = 'opencode') {
+  const available = new Set(inventory);
+  return Object.fromEntries(Object.entries(declaredClasses(tool)).map(([modelClass, candidates]) => [
+    modelClass,
+    candidates.find((candidate) => available.has(candidate)) || null,
+  ]));
+}
+
+function createAgentCharter(request, tool, factoryModels) {
+  const goal = String(request?.goal || '').trim();
+  const capability = String(request?.capability || '').trim();
+  if (!goal) throw new Error('Dynamic agent goal is required');
+  if (!capability) throw new Error('Dynamic agent capability is required');
+  const factory = orchestraConfig.agentFactory;
+  const profile = factory?.profiles?.[capability];
+  if (!factory?.enabled || !profile) throw new Error(`No exact permission envelope exists for capability: ${capability}`);
+  if (profile.externalWrites && request.externalWriteAuthorized !== true) {
+    throw new Error(`Capability ${capability} requires explicit authorization for the requested external write`);
+  }
+  const model = factoryModels?.[profile.modelClass] || null;
+  if (!model) throw new Error(`No verified ${tool} model is available for class: ${profile.modelClass}`);
+  const slug = goal.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 36) || 'specialist';
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify({ tool, capability, goal })).digest('hex').slice(0, 8);
+  const evidence = [...new Set((request.evidence || []).map((item) => String(item).trim()).filter(Boolean))];
+  if (!evidence.length) evidence.push('Return direct evidence that the requested outcome exists and works');
+  return {
+    schemaVersion: 1,
+    name: `orchestra-${slug}-${fingerprint}`,
+    lifecycle: factory.lifecycle,
+    goal,
+    capability,
+    permissionEnvelope: profile.template,
+    modelClass: profile.modelClass,
+    model,
+    writes: profile.writes,
+    externalWrites: profile.externalWrites,
+    independentProofRequired: Boolean(factory.requireIndependentProofAfterWrites && (profile.writes || profile.externalWrites)),
+    evidence,
+  };
 }
 
 function modelProbe(home, model, runner = spawnSync, binary = executable('opencode')) {
@@ -384,13 +430,13 @@ function probeForTool(tool) {
   return modelProbe;
 }
 
-function resolveExecutableModels(home, inventory, probeModel = modelProbe, tool = 'opencode') {
+function resolveExecutableCandidates(home, inventory, candidatesByKey, probeModel = modelProbe, tool = 'opencode') {
   const available = new Set(inventory);
   const probes = new Map();
   const blockedProviders = new Set();
   const routes = {};
-  for (const [role, candidates] of Object.entries(declaredRoles(tool))) {
-    routes[role] = null;
+  for (const [key, candidates] of Object.entries(candidatesByKey)) {
+    routes[key] = null;
     for (const candidate of candidates) {
       if (!available.has(candidate)) continue;
       const provider = tool === 'opencode' ? candidate.split('/')[0] : tool;
@@ -399,12 +445,20 @@ function resolveExecutableModels(home, inventory, probeModel = modelProbe, tool 
       const probe = probes.get(candidate);
       if (probe.authFailure) blockedProviders.add(provider);
       if (probe.ok) {
-        routes[role] = candidate;
+        routes[key] = candidate;
         break;
       }
     }
   }
   return { routes, probes: [...probes.values()], blockedProviders: [...blockedProviders] };
+}
+
+function resolveExecutableModels(home, inventory, probeModel = modelProbe, tool = 'opencode') {
+  return resolveExecutableCandidates(home, inventory, declaredRoles(tool), probeModel, tool);
+}
+
+function resolveExecutableFactoryModels(home, inventory, probeModel = modelProbe, tool = 'opencode') {
+  return resolveExecutableCandidates(home, inventory, declaredClasses(tool), probeModel, tool);
 }
 
 function printModelProbes(resolution, tool = 'opencode') {
@@ -450,17 +504,44 @@ function personaTarget(tool, home) {
   return path.join(home, '.cursor', 'rules', 'lenka.mdc');
 }
 
+function selectedAgentModel(agentName, resolvedRoles = {}, resolvedFactory = {}) {
+  if (resolvedRoles[agentName]) return resolvedRoles[agentName];
+  const profile = Object.values(orchestraConfig.agentFactory?.profiles || {}).find((candidate) => candidate.template === agentName);
+  return profile ? resolvedFactory[profile.modelClass] || null : null;
+}
+
+function runtimeManifest(tool, resolvedFactoryModels = {}) {
+  const factory = orchestraConfig.agentFactory || {};
+  const profiles = Object.fromEntries(Object.entries(factory.profiles || {}).map(([name, profile]) => [name, {
+    permissionEnvelope: profile.template,
+    modelClass: profile.modelClass,
+    model: resolvedFactoryModels[profile.modelClass] || null,
+    writes: Boolean(profile.writes),
+    externalWrites: Boolean(profile.externalWrites),
+    independentProofRequired: Boolean(factory.requireIndependentProofAfterWrites && (profile.writes || profile.externalWrites)),
+  }]));
+  return `${JSON.stringify({
+    schemaVersion: 1,
+    harness: tool,
+    lifecycle: factory.lifecycle,
+    unknownCapabilityPolicy: factory.unknownCapabilityPolicy,
+    profiles,
+  }, null, 2)}\n`;
+}
+
 function buildPlan(options) {
   const operations = [];
   const warnings = [];
   const agents = agentFiles().map(parseAgent);
   for (const tool of options.selectedTools) {
     const resolvedModels = options.resolvedModelsByTool?.[tool] || options.resolvedModels || {};
+    const resolvedFactoryModels = options.resolvedFactoryModelsByTool?.[tool] || options.resolvedFactoryModels || {};
     if (!options.projectOnly) {
       const globalAgents = path.join(options.home, ...tools[tool].agentPath);
       for (const agent of agents) {
         const extension = tool === 'codex' ? '.toml' : '.md';
-        operations.push({ target: path.join(globalAgents, `${agent.name}${extension}`), content: convert(agent, tool, resolvedModels[agent.name]), kind: `${tool} agent` });
+        const selectedModel = selectedAgentModel(agent.name, resolvedModels, resolvedFactoryModels);
+        operations.push({ target: path.join(globalAgents, `${agent.name}${extension}`), content: convert(agent, tool, selectedModel), kind: `${tool} agent` });
       }
       const personaContent = tool === 'cursor'
         ? `---\ndescription: Lenka orchestrator persona\nalwaysApply: true\n---\n\n${persona}`
@@ -471,8 +552,14 @@ function buildPlan(options) {
       const projectAgents = path.join(options.project, `.${tool}`, 'agents');
       for (const agent of agents) {
         const extension = tool === 'codex' ? '.toml' : '.md';
-        operations.push({ target: path.join(projectAgents, `${agent.name}${extension}`), content: convert(agent, tool, resolvedModels[agent.name]), kind: `${tool} project agent` });
+        const selectedModel = selectedAgentModel(agent.name, resolvedModels, resolvedFactoryModels);
+        operations.push({ target: path.join(projectAgents, `${agent.name}${extension}`), content: convert(agent, tool, selectedModel), kind: `${tool} project agent` });
       }
+      operations.push({
+        target: path.join(options.project, '.agent-orchestra', 'runtime', `${tool}.json`),
+        content: runtimeManifest(tool, resolvedFactoryModels),
+        kind: `${tool} runtime manifest`,
+      });
     }
   }
   if (!options.projectOnly) {
@@ -620,6 +707,12 @@ function doctor(options) {
     const auditor = agents.find((agent) => agent.name === 'dev-auditor');
     check(auditor?.frontmatter.permission?.edit === 'deny', 'nested permissions', 'dev-auditor edit=deny');
     check(codexAgent(auditor).includes('sandbox_mode = "read-only"'), 'read-only conversion invariant');
+    const agentNames = new Set(agents.map((agent) => agent.name));
+    const profiles = Object.entries(orchestraConfig.agentFactory?.profiles || {});
+    check(profiles.length > 0, 'dynamic agent permission envelopes', `${profiles.length} profiles`);
+    for (const [name, profile] of profiles) {
+      check(agentNames.has(profile.template), `factory profile ${name}`, `template=${profile.template}`);
+    }
   } catch (error) {
     check(false, 'source validation', error.message);
   }
@@ -632,11 +725,20 @@ function doctor(options) {
     check(Boolean(toolVersion), `${tool} CLI`, toolVersion || 'not found');
   }
   options.resolvedModelsByTool = {};
+  options.resolvedFactoryModelsByTool = {};
   for (const tool of options.selectedTools.filter((candidate) => Object.keys(declaredRoles(candidate)).length)) {
     const inventory = options.structural && tool === 'claude' ? declaredModels(tool) : modelInventory(options.home, tool);
-    const resolution = options.structural ? null : resolveExecutableModels(options.home, inventory, probeForTool(tool), tool);
+    const probeCache = new Map();
+    const probe = (home, model) => {
+      if (!probeCache.has(model)) probeCache.set(model, probeForTool(tool)(home, model));
+      return probeCache.get(model);
+    };
+    const resolution = options.structural ? null : resolveExecutableModels(options.home, inventory, probe, tool);
+    const factoryResolution = options.structural ? null : resolveExecutableFactoryModels(options.home, inventory, probe, tool);
     const resolved = resolution ? resolution.routes : resolveModels(inventory, tool);
+    const resolvedFactory = factoryResolution ? factoryResolution.routes : resolveFactoryModels(inventory, tool);
     options.resolvedModelsByTool[tool] = resolved;
+    options.resolvedFactoryModelsByTool[tool] = resolvedFactory;
     if (options.structural) {
       const matchedRoutes = Object.values(resolved).filter(Boolean).length;
       console.log(`INFO ${tool} model declarations — ${inventory.length} visible; ${matchedRoutes}/${Object.keys(resolved).length} role routes matched`);
@@ -645,6 +747,9 @@ function doctor(options) {
       printModelProbes(resolution, tool);
       for (const [role, selectedModel] of Object.entries(resolved)) {
         check(Boolean(selectedModel), `${tool} executable model route ${role}`, selectedModel || 'no working candidate available');
+      }
+      for (const [modelClass, selectedModel] of Object.entries(resolvedFactory)) {
+        check(Boolean(selectedModel), `${tool} dynamic model class ${modelClass}`, selectedModel || 'no working candidate available');
       }
     }
   }
@@ -668,15 +773,28 @@ function main(argv = process.argv.slice(2)) {
   const options = parseArgs(argv);
   if (options.command === 'doctor') return doctor(options);
   options.resolvedModelsByTool = {};
+  options.resolvedFactoryModelsByTool = {};
   for (const tool of options.selectedTools.filter((candidate) => Object.keys(declaredRoles(candidate)).length)) {
     const inventory = options.structural && tool === 'claude' ? declaredModels(tool) : modelInventory(options.home, tool);
-    if (options.structural || options.dryRun) options.resolvedModelsByTool[tool] = resolveModels(inventory, tool);
+    if (options.structural || options.dryRun) {
+      options.resolvedModelsByTool[tool] = resolveModels(inventory, tool);
+      options.resolvedFactoryModelsByTool[tool] = resolveFactoryModels(inventory, tool);
+    }
     else {
-      const resolution = resolveExecutableModels(options.home, inventory, probeForTool(tool), tool);
+      const probeCache = new Map();
+      const probe = (home, model) => {
+        if (!probeCache.has(model)) probeCache.set(model, probeForTool(tool)(home, model));
+        return probeCache.get(model);
+      };
+      const resolution = resolveExecutableModels(options.home, inventory, probe, tool);
+      const factoryResolution = resolveExecutableFactoryModels(options.home, inventory, probe, tool);
       printModelProbes(resolution, tool);
       options.resolvedModelsByTool[tool] = resolution.routes;
+      options.resolvedFactoryModelsByTool[tool] = factoryResolution.routes;
       const missing = Object.entries(resolution.routes).filter(([, model]) => !model).map(([role]) => role);
       if (missing.length) throw new Error(`No executable ${tool} model candidate for: ${missing.join(', ')}`);
+      const missingClasses = Object.entries(factoryResolution.routes).filter(([, model]) => !model).map(([modelClass]) => modelClass);
+      if (missingClasses.length) throw new Error(`No executable ${tool} dynamic model candidate for: ${missingClasses.join(', ')}`);
     }
   }
   const plan = buildPlan(options);
@@ -696,4 +814,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
 }
 
-export { parseFrontmatter, parseAgent, codexAgent, buildPlan, classify, modelInventory, modelProbe, codexModelInventory, codexModelProbe, claudeModelProbe, resolveModels, resolveExecutableModels, main };
+export { parseFrontmatter, parseAgent, codexAgent, buildPlan, classify, modelInventory, modelProbe, codexModelInventory, codexModelProbe, claudeModelProbe, resolveModels, resolveFactoryModels, resolveExecutableModels, resolveExecutableFactoryModels, createAgentCharter, runtimeManifest, main };
