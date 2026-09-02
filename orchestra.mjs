@@ -284,6 +284,10 @@ function portableFiles(root, excludedPaths = []) {
   return { files, skipped };
 }
 
+function repoLabel(absolutePath) {
+  return path.relative(repoRoot, absolutePath).split(path.sep).join('/');
+}
+
 function personaTarget(tool, home) {
   if (tool === 'opencode') return path.join(home, '.config', 'opencode', 'AGENTS.md');
   if (tool === 'claude') return path.join(home, '.claude', 'CLAUDE.md');
@@ -321,7 +325,7 @@ function buildPlan(options) {
     for (const file of skills.files) {
       operations.push({ target: path.join(options.home, '.agents', 'skills', file.relative), content: fs.readFileSync(file.source), kind: 'shared skill' });
     }
-    for (const link of skills.skipped) warnings.push(`Skipped non-portable symlink: ${path.relative(repoRoot, link.path)} -> ${link.target}`);
+    for (const link of skills.skipped) warnings.push(`Skipped non-portable source: ${repoLabel(link.path)} -> ${link.target}`);
   }
   for (const [role, selectedModel] of Object.entries(resolvedModels)) {
     if (!selectedModel) warnings.push(`No available model matched ${role}; it will inherit the OpenCode default`);
@@ -485,7 +489,7 @@ function doctor(options) {
   }
   if (!options.projectOnly) {
     const skills = portableFiles(sourceSkills, orchestraConfig.portability?.excludedSkillPaths || []);
-    if (skills.skipped.length) skills.skipped.forEach((link) => console.log(`WARN non-portable source omitted — ${path.relative(repoRoot, link.path)} -> ${link.target}`));
+    if (skills.skipped.length) skills.skipped.forEach((link) => console.log(`WARN non-portable source omitted — ${repoLabel(link.path)} -> ${link.target}`));
     else console.log('PASS skill sources are portable');
   }
   const planned = buildPlan(options);
