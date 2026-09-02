@@ -140,6 +140,7 @@ function status(options) {
     console.log(`Conductor: Lenka`);
     console.log(`Model: ${manifest.primary?.model || 'not verified'}`);
     console.log(`Model class: ${manifest.primary?.modelClass || 'unknown'}`);
+    if (manifest.primary?.reasoningEffort) console.log(`Reasoning effort: ${manifest.primary.reasoningEffort}`);
     console.log(`Agents: ${manifest.lifecycle === 'one-run' ? 'created on demand' : manifest.lifecycle}`);
     console.log('Verification: required after writes');
   }

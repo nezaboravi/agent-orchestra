@@ -208,7 +208,7 @@ function claudeAgent(agent, selectedModel = null) {
   return ['---', `name: ${agent.name}`, `description: ${agent.frontmatter.description || ''}`, ...model, 'tools:', ...[...allowed].map((tool) => `  - ${tool}`), '---', '', agent.body, ''].join('\n');
 }
 
-function codexAgent(agent, selectedModel = null) {
+function codexAgent(agent, selectedModel = null, reasoningEffort = null) {
   const permission = agent.frontmatter.permission;
   const readOnly = permission === 'deny' || (permission && typeof permission === 'object' && (permission.edit === 'deny' || permission.write === 'deny'));
   const lines = [
@@ -217,6 +217,7 @@ function codexAgent(agent, selectedModel = null) {
     `sandbox_mode = "${readOnly ? 'read-only' : 'workspace-write'}"`,
   ];
   if (selectedModel) lines.push(`model = "${selectedModel}"`);
+  if (reasoningEffort) lines.push(`model_reasoning_effort = "${reasoningEffort}"`);
   lines.push('', 'developer_instructions = """', agent.body, '"""', '');
   return lines.join('\n');
 }
@@ -265,10 +266,10 @@ function opencodeAgent(agent, selectedModel) {
   return agent.raw.replace(/^(mode:\s*.+)$/m, `$1\nmodel: ${selectedModel}`);
 }
 
-function convert(agent, tool, selectedModel = null) {
+function convert(agent, tool, selectedModel = null, reasoningEffort = null) {
   if (tool === 'opencode') return opencodeAgent(agent, selectedModel);
   if (tool === 'claude') return claudeAgent(agent, selectedModel);
-  if (tool === 'codex') return codexAgent(agent, selectedModel);
+  if (tool === 'codex') return codexAgent(agent, selectedModel, reasoningEffort);
   if (tool === 'kimi') return kimiAgent(agent);
   if (tool === 'cursor') return cursorAgent(agent);
   throw new Error(`No converter for ${tool}`);
@@ -387,6 +388,7 @@ function createAgentCharter(request, tool, factoryModels) {
     permissionEnvelope: profile.template,
     modelClass: profile.modelClass,
     model,
+    ...(reasoningForClass(tool, profile.modelClass) ? { reasoningEffort: reasoningForClass(tool, profile.modelClass) } : {}),
     writes: profile.writes,
     externalWrites: profile.externalWrites,
     independentProofRequired: Boolean(factory.requireIndependentProofAfterWrites && (profile.writes || profile.externalWrites)),
@@ -601,17 +603,38 @@ function selectedAgentModel(agentName, resolvedRoles = {}, resolvedFactory = {})
   return profile ? resolvedFactory[profile.modelClass] || null : null;
 }
 
+function reasoningPolicy(tool) {
+  return orchestraConfig.modelPolicy.adapters?.[tool]?.reasoningEffort || {};
+}
+
+function selectedAgentReasoning(agentName, tool) {
+  if (tool !== 'codex') return null;
+  const policy = reasoningPolicy(tool);
+  if (policy.roles?.[agentName]) return policy.roles[agentName];
+  const profile = Object.values(orchestraConfig.agentFactory?.profiles || {}).find((candidate) => candidate.template === agentName);
+  return profile ? policy.classes?.[profile.modelClass] || null : null;
+}
+
+function reasoningForClass(tool, modelClass) {
+  return tool === 'codex' ? reasoningPolicy(tool).classes?.[modelClass] || null : null;
+}
+
 function runtimeManifest(tool, resolvedFactoryModels = {}) {
   const factory = orchestraConfig.agentFactory || {};
   const primaryModelClass = orchestraConfig.modelPolicy?.classes?.coordination || 'mid';
-  const profiles = Object.fromEntries(Object.entries(factory.profiles || {}).map(([name, profile]) => [name, {
-    permissionEnvelope: profile.template,
-    modelClass: profile.modelClass,
-    model: resolvedFactoryModels[profile.modelClass] || null,
-    writes: Boolean(profile.writes),
-    externalWrites: Boolean(profile.externalWrites),
-    independentProofRequired: Boolean(factory.requireIndependentProofAfterWrites && (profile.writes || profile.externalWrites)),
-  }]));
+  const profiles = Object.fromEntries(Object.entries(factory.profiles || {}).map(([name, profile]) => {
+    const reasoningEffort = reasoningForClass(tool, profile.modelClass);
+    return [name, {
+      permissionEnvelope: profile.template,
+      modelClass: profile.modelClass,
+      model: resolvedFactoryModels[profile.modelClass] || null,
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+      writes: Boolean(profile.writes),
+      externalWrites: Boolean(profile.externalWrites),
+      independentProofRequired: Boolean(factory.requireIndependentProofAfterWrites && (profile.writes || profile.externalWrites)),
+    }];
+  }));
+  const primaryReasoningEffort = reasoningForClass(tool, primaryModelClass);
   return `${JSON.stringify({
     schemaVersion: 1,
     harness: tool,
@@ -621,6 +644,7 @@ function runtimeManifest(tool, resolvedFactoryModels = {}) {
       role: 'coordination',
       modelClass: primaryModelClass,
       model: resolvedFactoryModels[primaryModelClass] || null,
+      ...(primaryReasoningEffort ? { reasoningEffort: primaryReasoningEffort } : {}),
     },
     profiles,
   }, null, 2)}\n`;
@@ -638,7 +662,8 @@ function buildPlan(options) {
       for (const agent of agents) {
         const extension = tool === 'codex' ? '.toml' : '.md';
         const selectedModel = selectedAgentModel(agent.name, resolvedModels, resolvedFactoryModels);
-        operations.push({ target: path.join(globalAgents, `${agent.name}${extension}`), content: convert(agent, tool, selectedModel), kind: `${tool} agent` });
+        const reasoningEffort = selectedAgentReasoning(agent.name, tool);
+        operations.push({ target: path.join(globalAgents, `${agent.name}${extension}`), content: convert(agent, tool, selectedModel, reasoningEffort), kind: `${tool} agent` });
       }
       const personaContent = tool === 'cursor'
         ? `---\ndescription: Lenka orchestrator persona\nalwaysApply: true\n---\n\n${persona}`
@@ -655,7 +680,8 @@ function buildPlan(options) {
       for (const agent of agents) {
         const extension = tool === 'codex' ? '.toml' : '.md';
         const selectedModel = selectedAgentModel(agent.name, resolvedModels, resolvedFactoryModels);
-        operations.push({ target: path.join(projectAgents, `${agent.name}${extension}`), content: convert(agent, tool, selectedModel), kind: `${tool} project agent` });
+        const reasoningEffort = selectedAgentReasoning(agent.name, tool);
+        operations.push({ target: path.join(projectAgents, `${agent.name}${extension}`), content: convert(agent, tool, selectedModel, reasoningEffort), kind: `${tool} project agent` });
       }
       operations.push({
         target: path.join(options.project, '.agent-orchestra', 'runtime', `${tool}.json`),

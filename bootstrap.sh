@@ -213,13 +213,16 @@ else
 fi
 [ -f "$runtime_manifest" ] || fail "$SELECTED_HARNESS runtime manifest is missing: $runtime_manifest"
 primary_model=$(node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(manifest.primary?.model || "");' "$runtime_manifest")
+reasoning_effort=$(node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(manifest.primary?.reasoningEffort || "");' "$runtime_manifest")
 [ -n "$primary_model" ] || fail "No verified $SELECTED_HARNESS coordination model was recorded for Lenka"
 printf 'Conductor model: %s\n' "$primary_model"
+if [ -n "$reasoning_effort" ]; then printf 'Reasoning effort: %s\n' "$reasoning_effort"; fi
 cd "$launch_dir"
 harness_binary=$(command -v "$SELECTED_HARNESS")
 export AGENT_ORCHESTRA_HARNESS="$SELECTED_HARNESS"
 export AGENT_ORCHESTRA_HARNESS_BINARY="$harness_binary"
 export AGENT_ORCHESTRA_PRIMARY_MODEL="$primary_model"
+export AGENT_ORCHESTRA_REASONING_EFFORT="$reasoning_effort"
 if [ "$USE_HERDR" -eq 1 ]; then
   session_name=$(node "$REPO_DIR/session-name.mjs" "$launch_dir")
   printf 'Herdr session: %s\n' "$session_name"

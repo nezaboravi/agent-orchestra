@@ -38,6 +38,12 @@ candidate capable of the role is used. Project and external writes always
 produce a second, read-only proof task, and the final report records the real
 model, result, verification, tokens, and cost available from the harness.
 
+Codex reasoning is part of routing rather than an inherited UI preference.
+Economy profiles use `low`, mid profiles and the conductor use `medium`, and
+the strongest/final-audit route uses `high`. Both the launcher and generated
+Codex role files carry the selected value, so a prior session cannot change the
+orchestra's cost and depth policy.
+
 Each project install materializes that adapter decision in
 `.agent-orchestra/runtime/<harness>.json`. This ignored manifest contains no
 credentials. It prevents the primary orchestrator from spending tokens on

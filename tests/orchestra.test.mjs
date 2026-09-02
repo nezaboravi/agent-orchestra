@@ -44,7 +44,9 @@ test('Codex conversion keeps auditors read-only and builders writable', () => {
 
   assert.match(codexAgent(auditor), /sandbox_mode = "read-only"/);
   assert.match(codexAgent(builder), /sandbox_mode = "workspace-write"/);
-  assert.match(codexAgent(builder, 'gpt-5.6-luna'), /model = "gpt-5.6-luna"/);
+  const generated = codexAgent(builder, 'gpt-5.6-luna', 'medium');
+  assert.match(generated, /model = "gpt-5.6-luna"/);
+  assert.match(generated, /model_reasoning_effort = "medium"/);
 });
 
 test('Codex inventory and live probe use Codex-native model slugs', () => {
@@ -215,11 +217,21 @@ test('model routing is adapter-specific', () => {
   const opencode = resolveModels(['opencode-go/deepseek-v4-flash', 'opencode-go/kimi-k2.7-code'], 'opencode');
 
   assert.equal(codex['dev-lead'], 'gpt-5.6-luna');
-  assert.equal(codex['dev-auditor'], 'gpt-5.6-luna');
+  assert.equal(codex['dev-auditor'], 'gpt-5.6-sol');
   assert.equal(claude['dev-lead'], 'haiku');
   assert.equal(claude['dev-auditor'], 'haiku');
   assert.ok(Object.values(kimi).every((model) => model === 'kimi-code/k3'));
   assert.equal(opencode['dev-tester'], 'opencode-go/kimi-k2.7-code');
+});
+
+test('Codex fixed workflow roles follow their declared model classes', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, 'orchestra.json'), 'utf8'));
+  const codex = config.modelPolicy.adapters.codex;
+  assert.equal(codex.roles['dev-lead'][0], codex.classes.mid[0]);
+  assert.equal(codex.roles['dev-planner'][0], codex.classes.mid[0]);
+  assert.equal(codex.roles['dev-builder'][0], codex.classes.mid[0]);
+  assert.equal(codex.roles['dev-tester'][0], codex.classes.economy[0]);
+  assert.equal(codex.roles['dev-auditor'][0], codex.classes.strongest[0]);
 });
 
 test('dynamic model classes are adapter-specific and ordered by cost policy', () => {
@@ -246,6 +258,7 @@ test('agent factory creates a one-run charter from the narrowest declared envelo
   assert.equal(charter.permissionEnvelope, 'explorer');
   assert.equal(charter.modelClass, 'economy');
   assert.equal(charter.model, 'gpt-5.6-luna');
+  assert.equal(charter.reasoningEffort, 'low');
   assert.equal(charter.writes, false);
   assert.equal(charter.independentProofRequired, false);
   assert.deepEqual(charter.evidence, ['Cite the migration path and field names']);
@@ -415,6 +428,41 @@ test('project runtime manifest gives Lenka exact adapter-local routes without cr
     independentProofRequired: false,
   });
   assert.equal(JSON.stringify(manifest).match(/token|secret|credential/gi), null);
+});
+
+test('Codex runtime and generated roles pin reasoning effort by responsibility', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-codex-reasoning-'));
+  const project = path.join(root, 'project');
+  const models = {
+    economy: 'gpt-5.6-luna',
+    mid: 'gpt-5.6-terra',
+    strongest: 'gpt-5.6-sol',
+  };
+  const plan = buildPlan({
+    selectedTools: ['codex'],
+    home: path.join(root, 'home'),
+    project,
+    projectOnly: true,
+    resolvedModelsByTool: {
+      codex: {
+        'dev-lead': 'gpt-5.6-terra',
+        'dev-planner': 'gpt-5.6-terra',
+        'dev-builder': 'gpt-5.6-terra',
+        'dev-tester': 'gpt-5.6-luna',
+        'dev-auditor': 'gpt-5.6-sol',
+      },
+    },
+    resolvedFactoryModelsByTool: { codex: models },
+  });
+  const role = (name) => plan.operations.find((operation) => operation.target.endsWith(`${path.sep}${name}.toml`)).content;
+  assert.match(role('dev-lead'), /model_reasoning_effort = "medium"/);
+  assert.match(role('dev-tester'), /model_reasoning_effort = "low"/);
+  assert.match(role('dev-auditor'), /model_reasoning_effort = "high"/);
+  const manifestOperation = plan.operations.find((operation) => operation.target.endsWith(`${path.sep}codex.json`));
+  const manifest = JSON.parse(manifestOperation.content);
+  assert.equal(manifest.primary.reasoningEffort, 'medium');
+  assert.equal(manifest.profiles['project-read'].reasoningEffort, 'low');
+  assert.equal(manifest.profiles['project-write'].reasoningEffort, 'medium');
 });
 
 test('project plan installs one ignored runtime manifest per selected harness', () => {

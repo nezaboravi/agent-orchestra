@@ -24,13 +24,14 @@ test('Lenka status reports the exact primary coordination route', () => {
   fs.writeFileSync(path.join(runtime, 'codex.json'), JSON.stringify({
     harness: 'codex',
     lifecycle: 'one-run',
-    primary: { role: 'coordination', modelClass: 'mid', model: 'gpt-5.6-terra' },
+    primary: { role: 'coordination', modelClass: 'mid', model: 'gpt-5.6-terra', reasoningEffort: 'medium' },
   }));
 
   const result = spawnSync(process.execPath, [cli, 'status', '--project', project], { encoding: 'utf8' });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Harness: codex/);
   assert.match(result.stdout, /Model: gpt-5\.6-terra/);
+  assert.match(result.stdout, /Reasoning effort: medium/);
   assert.match(result.stdout, /Agents: created on demand/);
 });
 

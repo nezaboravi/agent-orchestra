@@ -42,6 +42,7 @@ test('Unix bootstrap launches the selected CLI directly by default', () => {
   assert.match(unix, /exec node "\$REPO_DIR\/harness-launcher\.mjs"/);
   assert.match(unix, /runtime\/\$SELECTED_HARNESS\.json/);
   assert.match(unix, /AGENT_ORCHESTRA_PRIMARY_MODEL/);
+  assert.match(unix, /AGENT_ORCHESTRA_REASONING_EFFORT/);
 });
 
 test('Herdr remains an explicit project-scoped option', () => {

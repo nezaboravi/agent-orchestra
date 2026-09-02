@@ -49,7 +49,9 @@ Before dispatching a team, follow the model dispatch protocol:
    a route inside an ordinary task.
 2. Assign per role: volume work → cheapest model; planning and mid-level
    coding → a mid model; judgment (final audit, review) → the strongest
-   model available.
+   model available. When the runtime manifest includes `reasoningEffort`, use
+   it exactly: low for economy work, medium for coordination and normal
+   implementation, and high only for final audit and difficult judgment.
 3. Treat the user's explicit start instruction as dispatch authorization.
    Announce which agent and model will run and why, then continue without an
    extra confirmation prompt. Stop only at a destructive or external-write

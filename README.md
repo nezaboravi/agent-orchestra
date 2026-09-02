@@ -51,6 +51,12 @@ strongest routes according to their capability profile. The default path opens
 that CLI directly. If `--herdr` is added, each absolute project path gets its
 own stable Herdr session.
 
+Codex launches are deterministic in both dimensions: the verified model and
+the reasoning effort are pinned by the orchestra. Coordination, planning, and
+normal implementation use `medium`; economy workers use `low`; final audit
+uses `high`. A previous Codex session or machine-wide default cannot silently
+turn an ordinary run into a high-reasoning run.
+
 Native Windows currently supports `lenka up` through OpenCode. Codex and
 Claude selection through the Lenka command is implemented for macOS and Linux;
 their complete orchestration behavior proof remains pending. Windows
@@ -125,6 +131,8 @@ It writes an ignored, credential-free routing map to
 delegation instead of scanning the project, global configuration, or provider
 credentials. The map names the exact permission envelope and live model
 selected for every factory profile on that machine.
+For Codex, it also records the exact reasoning effort for the conductor and
+every dynamic permission profile.
 
 ## Inspect the installer manually
 

@@ -8,11 +8,12 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 
-function launcherArgs(harness, model, cwd = process.cwd()) {
+function launcherArgs(harness, model, cwd = process.cwd(), reasoningEffort = null) {
   const args = ['--model', model];
   if (harness === 'codex') {
     const persona = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
     args.push('--config', `developer_instructions=${JSON.stringify(persona)}`);
+    if (reasoningEffort) args.push('--config', `model_reasoning_effort=${JSON.stringify(reasoningEffort)}`);
     args.push('--sandbox', 'read-only', '--ask-for-approval', 'never');
   } else if (harness === 'kimi') {
     args.push('--agent-file', path.join(cwd, '.kimi-code', 'agents', 'lenka.md'), '--auto');
@@ -26,13 +27,14 @@ function main() {
   const harness = process.env.AGENT_ORCHESTRA_HARNESS;
   const binary = process.env.AGENT_ORCHESTRA_HARNESS_BINARY;
   const model = process.env.AGENT_ORCHESTRA_PRIMARY_MODEL;
+  const reasoningEffort = process.env.AGENT_ORCHESTRA_REASONING_EFFORT || null;
   if (!['codex', 'claude', 'kimi', 'opencode'].includes(harness) || !binary || !model) {
     console.error('ERROR: Lenka launcher is missing a verified harness or coordination model.');
     return 1;
   }
 
-  const args = launcherArgs(harness, model);
-  console.log(`Lenka is conducting with ${harness} / ${model}`);
+  const args = launcherArgs(harness, model, process.cwd(), reasoningEffort);
+  console.log(`Lenka is conducting with ${harness} / ${model}${reasoningEffort ? ` / ${reasoningEffort} reasoning` : ''}`);
   const result = spawnSync(binary, args, { stdio: 'inherit', env: process.env });
   if (result.error) {
     console.error(`ERROR: ${result.error.message}`);

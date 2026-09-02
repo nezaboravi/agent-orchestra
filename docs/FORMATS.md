@@ -14,7 +14,8 @@ live adapter-specific model. A file name is not a permanent team member.
 - Generated per project after live installer probes; ignored by Git
 - Contains: harness, lifecycle, fail-closed policy, capability profile,
   permission envelope, model class, selected live model, write flags, and
-  independent-proof requirement
+  independent-proof requirement; Codex manifests also contain the selected
+  reasoning effort
 - Never contains provider credentials, tokens, or copied authentication state
 - Lenka reads this file directly and does not repeat model discovery during a
   task
@@ -41,7 +42,9 @@ live adapter-specific model. A file name is not a permanent team member.
   `model`, `model_reasoning_effort`, `sandbox_mode`, `mcp_servers`, `skills.config`
 - Conversion: `edit: deny` → `sandbox_mode = "read-only"`; otherwise
   `"workspace-write"`; the model slug comes from Codex's own visible catalog
-  and is written only after a live probe succeeds
+  and is written only after a live probe succeeds; `model_reasoning_effort`
+  is generated from the orchestra policy (`low` economy, `medium` mid,
+  `high` strongest)
 
 ## Kimi Code CLI
 
