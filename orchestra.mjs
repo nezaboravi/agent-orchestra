@@ -261,15 +261,21 @@ function resolveModels(inventory) {
   ]));
 }
 
-function portableFiles(root) {
+function portableFiles(root, excludedPaths = []) {
   const files = [];
   const skipped = [];
+  const excluded = new Set(excludedPaths.map((entry) => entry.split(/[\\/]/).join(path.sep)));
   const visit = (directory, relative = '') => {
     for (const name of fs.readdirSync(directory).sort()) {
       const absolute = path.join(directory, name);
       const child = path.join(relative, name);
       const stat = fs.lstatSync(absolute);
-      if (stat.isSymbolicLink()) skipped.push({ path: absolute, target: fs.readlinkSync(absolute) });
+      if (excluded.has(child)) {
+        skipped.push({
+          path: absolute,
+          target: stat.isSymbolicLink() ? fs.readlinkSync(absolute) : 'declared non-portable source',
+        });
+      } else if (stat.isSymbolicLink()) skipped.push({ path: absolute, target: fs.readlinkSync(absolute) });
       else if (stat.isDirectory()) visit(absolute, child);
       else if (stat.isFile()) files.push({ source: absolute, relative: child });
     }
@@ -311,7 +317,7 @@ function buildPlan(options) {
     }
   }
   if (!options.projectOnly) {
-    const skills = portableFiles(sourceSkills);
+    const skills = portableFiles(sourceSkills, orchestraConfig.portability?.excludedSkillPaths || []);
     for (const file of skills.files) {
       operations.push({ target: path.join(options.home, '.agents', 'skills', file.relative), content: fs.readFileSync(file.source), kind: 'shared skill' });
     }
@@ -478,7 +484,7 @@ function doctor(options) {
     }
   }
   if (!options.projectOnly) {
-    const skills = portableFiles(sourceSkills);
+    const skills = portableFiles(sourceSkills, orchestraConfig.portability?.excludedSkillPaths || []);
     if (skills.skipped.length) skills.skipped.forEach((link) => console.log(`WARN non-portable source omitted — ${path.relative(repoRoot, link.path)} -> ${link.target}`));
     else console.log('PASS skill sources are portable');
   }

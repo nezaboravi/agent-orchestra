@@ -4,8 +4,8 @@ import path from 'node:path';
 import test from 'node:test';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
-const unix = fs.readFileSync(path.join(repoRoot, 'bootstrap.sh'), 'utf8');
-const windows = fs.readFileSync(path.join(repoRoot, 'bootstrap.ps1'), 'utf8');
+const unix = fs.readFileSync(path.join(repoRoot, 'bootstrap.sh'), 'utf8').replace(/\r\n/g, '\n');
+const windows = fs.readFileSync(path.join(repoRoot, 'bootstrap.ps1'), 'utf8').replace(/\r\n/g, '\n');
 
 test('Unix bootstrap is strict and supports macOS and Linux architectures', () => {
   assert.match(unix, /^#!\/bin\/sh\nset -eu/m);

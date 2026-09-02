@@ -15,7 +15,7 @@ jobs:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify shell and JavaScript tests
         run: |
           sh -n bootstrap.sh
@@ -29,7 +29,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Verify JavaScript tests
         shell: pwsh
         run: node --test tests/*.test.mjs

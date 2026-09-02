@@ -6,6 +6,9 @@
     "harness": "opencode",
     "desktopRequired": false
   },
+  "portability": {
+    "excludedSkillPaths": ["omarchy"]
+  },
   "team": {
     "name": "development",
     "entrypoint": "dev-lead",
