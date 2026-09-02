@@ -35,9 +35,13 @@ test('bootstraps install Herdr and the orchestra with platform-supported harness
   assert.match(windows, /opencode-ai/);
 });
 
-test('both bootstraps use a dedicated Herdr session', () => {
-  assert.match(unix, /herdr --session agent-orchestra/);
-  assert.match(windows, /--session agent-orchestra/);
+test('both bootstraps derive a dedicated Herdr session from the project path', () => {
+  assert.match(unix, /session-name\.mjs/);
+  assert.match(windows, /session-name\.mjs/);
+  assert.match(unix, /herdr --session "\$session_name"/);
+  assert.match(windows, /--session \$SessionName/);
+  assert.doesNotMatch(unix, /herdr --session agent-orchestra/);
+  assert.doesNotMatch(windows, /--session agent-orchestra/);
   assert.match(windows, /default_agent = "lenka"; model = \$OpenCodePrimaryModel/);
   assert.match(unix, /runtime\/\$SELECTED_HARNESS\.json/);
   assert.match(windows, /runtime\\opencode\.json/);

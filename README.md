@@ -44,7 +44,9 @@ lenka doctor
 `lenka up` auto-detects an authenticated harness. An explicit harness keeps
 all routing inside that service. The conductor uses the verified `mid`
 coordination model; one-run workers independently use economy, mid, or
-strongest routes according to their capability profile.
+strongest routes according to their capability profile. Each absolute project
+path gets its own stable Herdr session, so opening one project can never attach
+to another project's persisted panes.
 
 Native Windows currently supports `lenka up` through OpenCode. Codex and
 Claude selection through the Lenka command is implemented for macOS and Linux;
@@ -173,9 +175,10 @@ cd /path/to/project
 herdr
 ```
 
-The bootstrap uses the named `agent-orchestra` session and starts the selected
-harness with Lenka's instructions, so it never silently reattaches an unrelated
-default workspace such as another active project.
+The bootstrap derives a stable named session from the project's absolute path
+and starts the selected harness with Lenka's instructions. Re-running it for
+the same project reattaches to that project's persistent session; a different
+project gets an independent session.
 Herdr keeps the real terminal sessions alive and exposes agent state and
 automation. It does not replace the selected harness; it gives the agent team
 somewhere to run. Desktop clients remain optional.

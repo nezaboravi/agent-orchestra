@@ -211,7 +211,9 @@ fi
 primary_model=$(node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(manifest.primary?.model || "");' "$runtime_manifest")
 [ -n "$primary_model" ] || fail "No verified $SELECTED_HARNESS coordination model was recorded for Lenka"
 printf 'Conductor model: %s\n' "$primary_model"
-step "Opening the dedicated agent-orchestra Herdr session"
+session_name=$(node "$REPO_DIR/session-name.mjs" "$launch_dir")
+printf 'Herdr session: %s\n' "$session_name"
+step "Opening the dedicated project Herdr session"
 cd "$launch_dir"
 harness_binary=$(command -v "$SELECTED_HARNESS")
 herdr_config="$RUNTIME_DIR/herdr.toml"
@@ -220,4 +222,4 @@ export HERDR_CONFIG_PATH="$herdr_config"
 export AGENT_ORCHESTRA_HARNESS="$SELECTED_HARNESS"
 export AGENT_ORCHESTRA_HARNESS_BINARY="$harness_binary"
 export AGENT_ORCHESTRA_PRIMARY_MODEL="$primary_model"
-exec herdr --session agent-orchestra
+exec herdr --session "$session_name"

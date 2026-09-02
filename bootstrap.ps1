@@ -174,7 +174,12 @@ $OpenCodePrimaryModel = [string]$RuntimeRouting.primary.model
 if ([string]::IsNullOrWhiteSpace($OpenCodePrimaryModel)) {
     throw "No verified OpenCode coordination model was recorded for Lenka."
 }
-Write-Step "Opening the dedicated agent-orchestra Herdr session"
+$SessionName = & $Node (Join-Path $RepoDir "session-name.mjs") $LaunchDir
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($SessionName)) {
+    throw "Could not derive the project Herdr session name."
+}
+Write-Host "Herdr session: $SessionName"
+Write-Step "Opening the dedicated project Herdr session"
 $OpenCodeExe = Join-Path $NpmPrefix "node_modules\opencode-ai\bin\opencode.exe"
 if (-not (Test-Path -LiteralPath $OpenCodeExe -PathType Leaf)) {
     if ($OpenCodeCommand.Source.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -201,4 +206,4 @@ $Utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
 [System.IO.File]::WriteAllText($HerdrConfig, $HerdrConfigContent, $Utf8WithoutBom)
 $env:HERDR_CONFIG_PATH = $HerdrConfig
 $env:OPENCODE_CONFIG_CONTENT = @{ default_agent = "lenka"; model = $OpenCodePrimaryModel } | ConvertTo-Json -Compress
-& $Herdr --session agent-orchestra
+& $Herdr --session $SessionName
