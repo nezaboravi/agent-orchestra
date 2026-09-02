@@ -1,7 +1,6 @@
 ---
 description: Runs project-aware focused tests, formatters, linters, and static checks without implementing unrelated fixes.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 variant: high
 steps: 18
 color: success

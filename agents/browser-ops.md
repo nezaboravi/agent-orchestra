@@ -1,7 +1,6 @@
 ---
 description: Uses Playwright with GPT 5.6 Sol High for authenticated dashboards, external services, DNS, email providers, and browser administration.
 mode: subagent
-model: openai/gpt-5.6-sol
 variant: high
 steps: 45
 color: warning

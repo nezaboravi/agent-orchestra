@@ -1,7 +1,6 @@
 ---
 description: Implements scoped everyday code changes and proves them with focused verification.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 variant: max
 steps: 27
 color: success

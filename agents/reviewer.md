@@ -1,7 +1,6 @@
 ---
 description: Independent read-only reviewer for bugs, regressions, security risks, behavior changes, and missing tests.
 mode: subagent
-model: openai/gpt-5.6-sol
 variant: high
 steps: 15
 color: accent

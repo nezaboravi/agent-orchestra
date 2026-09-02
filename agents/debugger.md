@@ -1,7 +1,6 @@
 ---
 description: Investigates reproducible bugs, logs, failing tests, and root causes before making a focused fix.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 variant: max
 steps: 22
 color: warning

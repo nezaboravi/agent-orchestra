@@ -1,7 +1,6 @@
 ---
 description: Expensive escalation specialist for bugs that survived three verified attempts, cross-stack failures, security, or high-risk architecture.
 mode: subagent
-model: openai/gpt-5.6-sol
 variant: high
 steps: 33
 color: error

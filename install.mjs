@@ -26,6 +26,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Compatibility entrypoint. The original installer is retained below for
+// repository history, but every direct invocation now uses the safe portable
+// installer.
+const portableInstaller = await import('./orchestra.mjs');
+process.exit(portableInstaller.main(process.argv.slice(2)));
+
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const home = os.homedir();
 const cwd = process.cwd();
