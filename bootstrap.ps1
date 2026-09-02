@@ -121,8 +121,29 @@ if ($null -eq $OpenCodeCommand) { $OpenCodeCommand = Get-Command opencode.cmd -E
 
 if ($env:LENKA_CLI_ACTIVE -ne "1" -and (Test-Path -LiteralPath (Join-Path $RepoDir ".git") -PathType Container)) {
     Write-Step "Installing the Lenka command"
-    & npm.cmd install --global --prefix (Join-Path $TargetHome ".local") $RepoDir
+    $LocalPrefix = Join-Path $TargetHome ".local"
+    $PackageCache = Join-Path $RuntimeDir "packages"
+    New-Item -ItemType Directory -Force -Path $PackageCache | Out-Null
+    $PackOutput = @(& npm.cmd pack --silent --pack-destination $PackageCache $RepoDir)
+    if ($LASTEXITCODE -ne 0) { throw "Creating the Lenka package archive failed." }
+    $PackageName = [string]($PackOutput | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Last 1)
+    $PackagePath = Join-Path $PackageCache $PackageName.Trim()
+    if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) { throw "npm did not create the Lenka package archive." }
+    & npm.cmd install --global --prefix $LocalPrefix $PackagePath
     if ($LASTEXITCODE -ne 0) { throw "Lenka command installation failed." }
+    $GlobalRoot = (& npm.cmd root --global --prefix $LocalPrefix).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Could not resolve the Lenka installation directory." }
+    $InstalledRoot = Join-Path $GlobalRoot "agent-orchestra"
+    if (-not (Test-Path -LiteralPath $InstalledRoot -PathType Container)) { throw "Lenka package was not installed." }
+    $InstalledItem = Get-Item -LiteralPath $InstalledRoot
+    if (($InstalledItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+        throw "Lenka installation must be a standalone package, not a repository link."
+    }
+    $LenkaCommand = Join-Path $LocalPrefix "lenka.cmd"
+    if (-not (Test-Path -LiteralPath $LenkaCommand -PathType Leaf)) { throw "Lenka command shim was not installed." }
+    & $LenkaCommand --help | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Installed Lenka command is not executable." }
+    Write-Host "Lenka command: $LenkaCommand"
 }
 
 Write-Step "Detected tools"

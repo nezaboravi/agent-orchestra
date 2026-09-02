@@ -20,7 +20,7 @@ dependency of the orchestra.
 - **Shared skills** — resend, email best practices, DNS, crash diagnosis, ...
   installed to the portable `~/.agents/skills` source location.
 
-## Start on a new computer
+## Install on any computer
 
 The bootstrap detects the platform, installs an isolated Node.js runtime when
 needed, detects an authenticated harness, installs the team, verifies a real
@@ -29,8 +29,59 @@ only when `--herdr` is requested.
 It does not depend on Homebrew, Laravel Herd, a particular username, or a
 machine-specific project directory.
 
+The installed Lenka CLI is a standalone package under the user's local
+directory. It is deliberately not linked to the cloned repository, so the
+command continues to work if the clone lives in a protected folder, is moved,
+or is removed later.
+
+### macOS
+
+```sh
+git clone https://github.com/nezaboravi/agent-orchestra.git
+cd agent-orchestra
+./bootstrap.sh
+```
+
+### Linux, including Omarchy
+
+```sh
+git clone https://github.com/nezaboravi/agent-orchestra.git
+cd agent-orchestra
+./bootstrap.sh
+```
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/nezaboravi/agent-orchestra.git
+Set-Location agent-orchestra
+.\bootstrap.ps1
+```
+
+On an existing installation, pull the repository and run the same bootstrap
+command again. It replaces the installed package from a fresh local archive;
+it never leaves the CLI pointing back at the checkout.
+
+After installation, enter any project and start Lenka. These absolute command
+paths also work when the local executable directory is not on `PATH`:
+
+macOS or Linux:
+
+```sh
+cd /path/to/project
+"$HOME/.local/bin/lenka" up
+```
+
+Windows PowerShell:
+
+```powershell
+Set-Location C:\path\to\project
+& "$HOME\.local\lenka.cmd" up
+```
+
 After the first bootstrap, the same repository installs a small `lenka`
-command into the user's local executable directory. From any project:
+command into the user's local executable directory. When that directory is on
+`PATH`, the shorter commands are available from any project:
 
 ```sh
 lenka up
@@ -61,22 +112,6 @@ Native Windows currently supports `lenka up` through OpenCode. Codex and
 Claude selection through the Lenka command is implemented for macOS and Linux;
 their complete orchestration behavior proof remains pending. Windows
 multi-harness selection remains a later portability phase.
-
-macOS or Linux:
-
-```sh
-git clone https://github.com/nezaboravi/agent-orchestra.git
-cd agent-orchestra
-./bootstrap.sh
-```
-
-Windows PowerShell:
-
-```powershell
-git clone https://github.com/nezaboravi/agent-orchestra.git
-Set-Location agent-orchestra
-.\bootstrap.ps1
-```
 
 The first command is intentionally safe on an already configured machine:
 conflicting files stop the transaction before any write. Pass

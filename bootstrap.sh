@@ -140,12 +140,27 @@ claude_authenticated() {
   command -v claude >/dev/null 2>&1 && claude auth status 2>/dev/null | grep -Eq '"loggedIn"[[:space:]]*:[[:space:]]*true'
 }
 
+install_lenka() {
+  package_cache="$RUNTIME_DIR/packages"
+  local_prefix="$TARGET_HOME/.local"
+  mkdir -p "$package_cache"
+  package_name=$(npm pack --silent --pack-destination "$package_cache" "$REPO_DIR")
+  package_path="$package_cache/$package_name"
+  [ -f "$package_path" ] || fail "npm did not create the Lenka package archive"
+  npm install --global --prefix "$local_prefix" "$package_path"
+  installed_root=$(npm root --global --prefix "$local_prefix")/agent-orchestra
+  [ -d "$installed_root" ] || fail "Lenka package was not installed"
+  [ ! -L "$installed_root" ] || fail "Lenka installation must be a standalone package, not a repository symlink"
+  "$local_prefix/bin/lenka" --help >/dev/null
+  printf 'Lenka command: %s\n' "$local_prefix/bin/lenka"
+}
+
 step "Preparing portable runtime"
 install_node
 if [ "$USE_HERDR" -eq 1 ]; then install_herdr; fi
 if [ "${LENKA_CLI_ACTIVE:-0}" != "1" ] && [ -d "$REPO_DIR/.git" ]; then
   step "Installing the Lenka command"
-  npm install --global --prefix "$TARGET_HOME/.local" "$REPO_DIR"
+  install_lenka
 fi
 
 case "$HARNESS" in

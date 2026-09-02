@@ -37,6 +37,16 @@ test('bootstraps install the orchestra while keeping Herdr optional', () => {
   assert.match(windows, /opencode-ai/);
 });
 
+test('both bootstraps install Lenka from a package archive instead of linking the checkout', () => {
+  for (const source of [unix, windows]) {
+    assert.match(source, /npm(?:\.cmd)? pack --silent --pack-destination/);
+    assert.match(source, /npm(?:\.cmd)? install --global --prefix/);
+    assert.match(source, /standalone package, not a repository (?:symlink|link)/);
+  }
+  assert.doesNotMatch(unix, /npm install --global --prefix "\$TARGET_HOME\/\.local" "\$REPO_DIR"/);
+  assert.doesNotMatch(windows, /npm\.cmd install --global --prefix \(Join-Path \$TargetHome "\.local"\) \$RepoDir/);
+});
+
 test('Unix bootstrap launches the selected CLI directly by default', () => {
   assert.match(unix, /step "Opening Lenka directly in \$SELECTED_HARNESS"/);
   assert.match(unix, /exec node "\$REPO_DIR\/harness-launcher\.mjs"/);
