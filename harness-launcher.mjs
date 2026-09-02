@@ -8,30 +8,39 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 
-const harness = process.env.AGENT_ORCHESTRA_HARNESS;
-const binary = process.env.AGENT_ORCHESTRA_HARNESS_BINARY;
-const model = process.env.AGENT_ORCHESTRA_PRIMARY_MODEL;
-
-if (!['codex', 'claude', 'kimi', 'opencode'].includes(harness) || !binary || !model) {
-  console.error('ERROR: Lenka launcher is missing a verified harness or coordination model.');
-  process.exit(1);
+function launcherArgs(harness, model, cwd = process.cwd()) {
+  const args = ['--model', model];
+  if (harness === 'codex') {
+    const persona = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
+    args.push('--config', `developer_instructions=${JSON.stringify(persona)}`);
+    args.push('--sandbox', 'read-only', '--ask-for-approval', 'never');
+  } else if (harness === 'kimi') {
+    args.push('--agent-file', path.join(cwd, '.kimi-code', 'agents', 'lenka.md'), '--auto');
+  } else {
+    args.push('--agent', 'lenka');
+  }
+  return args;
 }
 
-const args = ['--model', model];
-if (harness === 'codex') {
-  const persona = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
-  args.push('--config', `developer_instructions=${JSON.stringify(persona)}`);
-  args.push('--sandbox', 'read-only', '--ask-for-approval', 'never');
-} else if (harness === 'kimi') {
-  args.push('--agent-file', path.join(process.cwd(), '.kimi-code', 'agents', 'lenka.md'), '--auto');
-} else {
-  args.push('--agent', 'lenka');
+function main() {
+  const harness = process.env.AGENT_ORCHESTRA_HARNESS;
+  const binary = process.env.AGENT_ORCHESTRA_HARNESS_BINARY;
+  const model = process.env.AGENT_ORCHESTRA_PRIMARY_MODEL;
+  if (!['codex', 'claude', 'kimi', 'opencode'].includes(harness) || !binary || !model) {
+    console.error('ERROR: Lenka launcher is missing a verified harness or coordination model.');
+    return 1;
+  }
+
+  const args = launcherArgs(harness, model);
+  console.log(`Lenka is conducting with ${harness} / ${model}`);
+  const result = spawnSync(binary, args, { stdio: 'inherit', env: process.env });
+  if (result.error) {
+    console.error(`ERROR: ${result.error.message}`);
+    return 1;
+  }
+  return result.status ?? 1;
 }
 
-console.log(`Lenka is conducting with ${harness} / ${model}`);
-const result = spawnSync(binary, args, { stdio: 'inherit', env: process.env });
-if (result.error) {
-  console.error(`ERROR: ${result.error.message}`);
-  process.exit(1);
-}
-process.exit(result.status ?? 1);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main();
+
+export { launcherArgs, main };
