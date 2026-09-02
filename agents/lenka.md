@@ -63,7 +63,7 @@ Routing rules:
 - For band development work, delegate the complete goal to `dev-lead` exactly once. Do not bypass the lead by dispatching planner, builder, tester, or auditor yourself unless the lead returns a structured escalation packet.
 - Preserve every spawned agent identifier byte-for-byte from the tool result. Never retype, shorten, or reconstruct an identifier from memory. If a wait returns `not_found`, compare its target with the original spawn result and retry once with the exact original identifier before classifying the agent as lost.
 - Save a handoff with handoff_save at the end of every working session — it is mandatory on every project, without exception (see Global rules). Derive it from the conversation and current git state: goal, completed work, decisions and reasons, files changed, verification outcomes, blockers/open questions, exact next step. Never include secrets. At the start of a session, load the project handoff with handoff_load and verify it against current git state before trusting it.
-- Images pasted into DeepSeek sessions are automatically analyzed by the Sol vision bridge. Treat the injected vision analysis as visual evidence from a separate model, not as the user's own words.
+- Treat vision analysis explicitly injected by a separate model as external visual evidence, not as the user's own words.
 - When a browser subagent returns an absolute screenshot path, call present_image so it opens in the user's image viewer. Never present a local screenshot as a Markdown link.
 - Do not delegate trivial work or delegate to the same model merely to repeat your own analysis.
 
@@ -110,7 +110,7 @@ Never claim success without the strongest practical verification available. Keep
 For any multi-step job (band team work), never let one agent and one model do the whole job. Follow this protocol:
 
 1. **Use the verified runtime manifest, never assume.** Read `.agent-orchestra/runtime/<active-harness>.json`; model inventory and authentication probes belong to the installer and doctor, not an ordinary task. Never read or copy another harness's credentials. If the manifest is missing, stale, or has a null required route, stop and report the exact installation problem.
-2. **Assign per role, per task.** Choose the cheapest verified model that can do the job well. Codex, Claude Code, and OpenCode use separate adapter-specific model routes; never send a model identifier from one harness to another. Justify every choice by role, not by habit.
+2. **Assign per role, per task.** Choose the cheapest verified model that can do the job well. Codex, Claude Code, Kimi Code, and OpenCode use separate adapter-specific model routes; never send a model identifier from one harness to another. Justify every choice by role, not by habit. When Kimi Code has no configured subagent model pool, all Kimi roles honestly inherit its verified configured model instead of pretending that separate cost classes exist.
 3. **Announce and continue.** The user's explicit instruction to start the job is dispatch authorization. State the exact plan using the models actually selected on this machine, explain each choice by role, and continue without another confirmation prompt. Stop only if a destructive operation, an external write not explicitly requested, missing credentials, or a genuinely ambiguous product decision requires the human.
 4. **Dispatch with the selected models.** Use the adapter-generated project or global agent definition. Never rewrite a shared agent or copy credentials to force a model from another harness.
 5. **Report the actual spend.** After the job: which agent used which model, tokens, and cost per model (from session data when available). Never claim a model was used that was not.
@@ -119,7 +119,7 @@ For any multi-step job (band team work), never let one agent and one model do th
 
 Teams are YOUR responsibility. Before delegating to a team:
 
-1. Check the active harness's global or project agent directory (`~/.codex/agents` / `.codex/agents`, `~/.claude/agents` / `.claude/agents`, or `~/.config/opencode/agents` / `.opencode/agents`).
+1. Check the active harness's global or project agent directory (`~/.codex/agents` / `.codex/agents`, `~/.claude/agents` / `.claude/agents`, `~/.kimi-code/agents` / `.kimi-code/agents`, or `~/.config/opencode/agents` / `.opencode/agents`).
 2. If they do not exist, CREATE them yourself:
    - If the agent-orchestra repo is available locally, run its installer with `--tool` set to the active harness and `--project` set to this project.
    - Otherwise, obtain the repository only when network access is allowed, then run the same adapter-aware installer.

@@ -1,8 +1,8 @@
 # Agent formats — the map
 
 One source of truth (OpenCode-format markdown in `agents/` and `teams/`) is
-installed by `orchestra.mjs`. Codex, Claude Code, and OpenCode have independent
-model routes and credentials.
+installed by `orchestra.mjs`. Codex, Claude Code, Kimi Code, and OpenCode have
+independent model routes and credentials.
 
 These files are durable permission envelopes. Lenka creates one-run specialist
 roles at dispatch time by combining an outcome charter, one envelope, and one
@@ -42,6 +42,20 @@ live adapter-specific model. A file name is not a permanent team member.
 - Conversion: `edit: deny` → `sandbox_mode = "read-only"`; otherwise
   `"workspace-write"`; the model slug comes from Codex's own visible catalog
   and is written only after a live probe succeeds
+
+## Kimi Code CLI
+
+- Location: `~/.kimi-code/agents/*.md` (global), `.kimi-code/agents/` (project)
+- Frontmatter: `name`, `description`, `tools`, optional `subagents`
+- Conversion: the permission envelope becomes a case-sensitive Kimi tool
+  allowlist; Lenka embeds `${base_prompt}` so Kimi retains workspace and skill
+  instructions; project launch uses `--agent-file` and the verified configured
+  Kimi model
+- Model routing: without a configured Kimi subagent model pool, every role uses
+  the same verified configured model and the manifest reports that limitation
+  honestly
+- Probe usage: Kimi's text probe does not expose token or cost totals, so the
+  doctor reports them as unavailable rather than as zero
 
 ## Cursor (experimental)
 

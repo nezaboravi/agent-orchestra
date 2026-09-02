@@ -1,7 +1,6 @@
 ---
 description: GPT 5.6 Sol High image and PDF analyst used automatically when the active model lacks vision.
 mode: subagent
-model: openai/gpt-5.6-sol
 variant: high
 steps: 6
 color: info

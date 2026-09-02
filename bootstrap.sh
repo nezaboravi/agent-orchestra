@@ -10,6 +10,7 @@ TARGET_HOME=${HOME}
 PROJECT=""
 PROJECT_ONLY=0
 NO_LAUNCH=0
+USE_HERDR=0
 STRUCTURAL_ONLY=0
 CONFLICT="fail"
 HARNESS="auto"
@@ -25,9 +26,10 @@ Options:
   --project PATH       Install project-local agents into PATH
   --project-only       Leave global configuration untouched (requires --project)
   --conflict POLICY    fail, skip, or backup (default: fail)
-  --harness NAME       auto, codex, claude, or opencode (default: auto)
-  --no-launch          Verify setup without opening Herdr
-  --structural-only    Do not require an authenticated OpenCode provider
+  --harness NAME       auto, codex, claude, kimi, or opencode (default: auto)
+  --herdr              Open the selected CLI inside a project Herdr session
+  --no-launch          Verify setup without opening the selected CLI
+  --structural-only    Do not require an authenticated provider
   --help               Show this help
 EOF
 }
@@ -39,6 +41,7 @@ while [ "$#" -gt 0 ]; do
     --project-only) PROJECT_ONLY=1; shift ;;
     --conflict) [ "$#" -ge 2 ] || { echo "ERROR: --conflict requires a policy" >&2; exit 2; }; CONFLICT=$2; shift 2 ;;
     --harness) [ "$#" -ge 2 ] || { echo "ERROR: --harness requires a name" >&2; exit 2; }; HARNESS=$2; shift 2 ;;
+    --herdr) USE_HERDR=1; shift ;;
     --no-launch) NO_LAUNCH=1; shift ;;
     --structural-only) STRUCTURAL_ONLY=1; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -47,7 +50,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$CONFLICT" in fail|skip|backup) ;; *) echo "ERROR: --conflict must be fail, skip, or backup" >&2; exit 2 ;; esac
-case "$HARNESS" in auto|codex|claude|opencode) ;; *) echo "ERROR: --harness must be auto, codex, claude, or opencode" >&2; exit 2 ;; esac
+case "$HARNESS" in auto|codex|claude|kimi|opencode) ;; *) echo "ERROR: --harness must be auto, codex, claude, kimi, or opencode" >&2; exit 2 ;; esac
 [ "$PROJECT_ONLY" -eq 0 ] || [ -n "$PROJECT" ] || { echo "ERROR: --project-only requires --project" >&2; exit 2; }
 
 case "$TARGET_HOME" in /*) ;; *) TARGET_HOME="$(pwd)/$TARGET_HOME" ;; esac
@@ -139,7 +142,7 @@ claude_authenticated() {
 
 step "Preparing portable runtime"
 install_node
-install_herdr
+if [ "$USE_HERDR" -eq 1 ]; then install_herdr; fi
 if [ "${LENKA_CLI_ACTIVE:-0}" != "1" ] && [ -d "$REPO_DIR/.git" ]; then
   step "Installing the Lenka command"
   npm install --global --prefix "$TARGET_HOME/.local" "$REPO_DIR"
@@ -147,10 +150,11 @@ fi
 
 case "$HARNESS" in
   codex) install_codex ;;
-  claude) command -v claude >/dev/null 2>&1 || fail "Claude Code is not installed; install it or choose --harness codex/opencode" ;;
+  claude) command -v claude >/dev/null 2>&1 || fail "Claude Code is not installed; install it or choose another harness" ;;
+  kimi) command -v kimi >/dev/null 2>&1 || fail "Kimi Code CLI is not installed; install it or choose another harness" ;;
   opencode) install_opencode ;;
   auto)
-    if ! command -v codex >/dev/null 2>&1 && ! command -v claude >/dev/null 2>&1 && ! command -v opencode >/dev/null 2>&1; then
+    if ! command -v codex >/dev/null 2>&1 && ! command -v claude >/dev/null 2>&1 && ! command -v kimi >/dev/null 2>&1 && ! command -v opencode >/dev/null 2>&1; then
       install_codex
     fi
     ;;
@@ -158,9 +162,9 @@ esac
 
 step "Detected tools"
 node --version
-herdr --version
+if [ "$USE_HERDR" -eq 1 ]; then herdr --version; fi
 
-if [ "$HARNESS" = "auto" ]; then CANDIDATES="codex claude opencode"; else CANDIDATES="$HARNESS"; fi
+if [ "$HARNESS" = "auto" ]; then CANDIDATES="codex claude kimi opencode"; else CANDIDATES="$HARNESS"; fi
 SELECTED_HARNESS=""
 for candidate in $CANDIDATES; do
   command -v "$candidate" >/dev/null 2>&1 || continue
@@ -181,7 +185,7 @@ for candidate in $CANDIDATES; do
 done
 
 if [ -z "$SELECTED_HARNESS" ]; then
-  fail "no authenticated harness worked; sign in to Codex or Claude Code, or connect an OpenCode provider, then run bootstrap again"
+  fail "no authenticated harness worked; sign in to Codex, Claude Code, Kimi Code, or an OpenCode provider, then run bootstrap again"
 fi
 
 "$SELECTED_HARNESS" --version
@@ -211,15 +215,19 @@ fi
 primary_model=$(node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(manifest.primary?.model || "");' "$runtime_manifest")
 [ -n "$primary_model" ] || fail "No verified $SELECTED_HARNESS coordination model was recorded for Lenka"
 printf 'Conductor model: %s\n' "$primary_model"
-session_name=$(node "$REPO_DIR/session-name.mjs" "$launch_dir")
-printf 'Herdr session: %s\n' "$session_name"
-step "Opening the dedicated project Herdr session"
 cd "$launch_dir"
 harness_binary=$(command -v "$SELECTED_HARNESS")
-herdr_config="$RUNTIME_DIR/herdr.toml"
-node -e 'const fs = require("node:fs"); const [file, shell] = process.argv.slice(1); fs.writeFileSync(file, `[terminal]\ndefault_shell = ${JSON.stringify(shell)}\nshell_mode = "non_login"\nnew_cwd = "current"\n`);' "$herdr_config" "$REPO_DIR/harness-launcher.mjs"
-export HERDR_CONFIG_PATH="$herdr_config"
 export AGENT_ORCHESTRA_HARNESS="$SELECTED_HARNESS"
 export AGENT_ORCHESTRA_HARNESS_BINARY="$harness_binary"
 export AGENT_ORCHESTRA_PRIMARY_MODEL="$primary_model"
-exec herdr --session "$session_name"
+if [ "$USE_HERDR" -eq 1 ]; then
+  session_name=$(node "$REPO_DIR/session-name.mjs" "$launch_dir")
+  printf 'Herdr session: %s\n' "$session_name"
+  step "Opening the selected CLI inside the project Herdr session"
+  herdr_config="$RUNTIME_DIR/herdr.toml"
+  node -e 'const fs = require("node:fs"); const [file, shell] = process.argv.slice(1); fs.writeFileSync(file, `[terminal]\ndefault_shell = ${JSON.stringify(shell)}\nshell_mode = "non_login"\nnew_cwd = "current"\n`);' "$herdr_config" "$REPO_DIR/harness-launcher.mjs"
+  export HERDR_CONFIG_PATH="$herdr_config"
+  exec herdr --session "$session_name"
+fi
+step "Opening Lenka directly in $SELECTED_HARNESS"
+exec node "$REPO_DIR/harness-launcher.mjs"

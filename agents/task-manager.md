@@ -1,7 +1,6 @@
 ---
 description: Creates, updates, searches, and organizes Taskavel tasks from explicit user requests.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 variant: high
 steps: 30
 color: accent

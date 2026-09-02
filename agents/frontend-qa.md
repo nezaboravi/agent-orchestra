@@ -1,7 +1,6 @@
 ---
 description: Uses Playwright with GPT 5.6 Sol High to verify application UI on desktop and mobile, including console and network failures.
 mode: subagent
-model: openai/gpt-5.6-sol
 variant: high
 steps: 36
 color: info

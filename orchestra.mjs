@@ -17,10 +17,11 @@ const orchestraConfig = JSON.parse(fs.readFileSync(path.join(repoRoot, 'orchestr
 const isWindows = process.platform === 'win32';
 
 const tools = {
-  opencode: { command: 'opencode', stable: true, agentPath: ['.config', 'opencode', 'agents'] },
-  claude: { command: 'claude', stable: true, agentPath: ['.claude', 'agents'] },
-  codex: { command: 'codex', stable: true, agentPath: ['.codex', 'agents'] },
-  cursor: { command: 'cursor', stable: false, agentPath: ['.cursor', 'agents'] },
+  opencode: { command: 'opencode', stable: true, agentPath: ['.config', 'opencode', 'agents'], projectAgentPath: ['.opencode', 'agents'] },
+  claude: { command: 'claude', stable: true, agentPath: ['.claude', 'agents'], projectAgentPath: ['.claude', 'agents'] },
+  codex: { command: 'codex', stable: true, agentPath: ['.codex', 'agents'], projectAgentPath: ['.codex', 'agents'] },
+  kimi: { command: 'kimi', stable: true, agentPath: ['.kimi-code', 'agents'], projectAgentPath: ['.kimi-code', 'agents'] },
+  cursor: { command: 'cursor', stable: false, agentPath: ['.cursor', 'agents'], projectAgentPath: ['.cursor', 'agents'] },
 };
 
 function usage(code = 0) {
@@ -220,6 +221,40 @@ function codexAgent(agent, selectedModel = null) {
   return lines.join('\n');
 }
 
+function kimiAgent(agent) {
+  const permission = agent.frontmatter.permission;
+  const allowed = new Set();
+  if (permission !== 'deny') {
+    if (!permission || permission.read !== 'deny') allowed.add('Read');
+    if (!permission || permission.grep !== 'deny') allowed.add('Grep');
+    if (!permission || permission.glob !== 'deny') allowed.add('Glob');
+    if (permission && permission.edit !== 'deny' && permission.write !== 'deny') {
+      allowed.add('Edit');
+      allowed.add('Write');
+    }
+    if (permission && permission.bash !== 'deny') allowed.add('Bash');
+    if (permission && permission.task !== 'deny') {
+      allowed.add('Agent');
+      allowed.add('AgentSwarm');
+    }
+  }
+  const taskRules = permission && typeof permission === 'object' ? allowedPatterns(permission.task) : [];
+  const subagents = taskRules.length ? [`subagents: ${taskRules.join(', ')}`] : [];
+  const basePrompt = agent.name === 'lenka' ? '${base_prompt}\n\n' : '';
+  return [
+    '---',
+    `name: ${agent.name}`,
+    `description: ${agent.frontmatter.description || ''}`,
+    'tools:',
+    ...[...allowed].map((tool) => `  - ${tool}`),
+    ...subagents,
+    '---',
+    '',
+    `${basePrompt}${agent.body}`,
+    '',
+  ].join('\n');
+}
+
 function cursorAgent(agent) {
   return `# ${agent.name}\n\n## When to use\n\n${agent.frontmatter.description || ''}\n\n## Instructions\n\n${agent.body}\n`;
 }
@@ -234,6 +269,7 @@ function convert(agent, tool, selectedModel = null) {
   if (tool === 'opencode') return opencodeAgent(agent, selectedModel);
   if (tool === 'claude') return claudeAgent(agent, selectedModel);
   if (tool === 'codex') return codexAgent(agent, selectedModel);
+  if (tool === 'kimi') return kimiAgent(agent);
   if (tool === 'cursor') return cursorAgent(agent);
   throw new Error(`No converter for ${tool}`);
 }
@@ -251,11 +287,30 @@ function targetEnvironment(home) {
 function modelInventory(home, tool = 'opencode') {
   if (tool === 'codex') return codexModelInventory(home);
   if (tool === 'claude') return declaredModels('claude');
+  if (tool === 'kimi') return kimiModelInventory(home);
   const binary = executable('opencode');
   if (!binary) return [];
   const result = spawnSync(binary, ['models'], { encoding: 'utf8', timeout: 15000, env: targetEnvironment(home) });
   if (result.status !== 0) return [];
   return [...new Set(result.stdout.split(/\r?\n/).map((line) => line.trim()).filter((line) => /^[^\s/]+\/[^\s]+$/.test(line)))];
+}
+
+function kimiModelInventory(home, runner = spawnSync, binary = executable('kimi')) {
+  if (!binary) return [];
+  const result = runner(binary, ['provider', 'list', '--json'], { encoding: 'utf8', timeout: 15000, env: targetEnvironment(home) });
+  if (result?.status !== 0) return [];
+  try {
+    const parsed = JSON.parse(result.stdout || '{}');
+    const models = Array.isArray(parsed.models)
+      ? parsed.models.map((model) => model.alias || model.name || model.id).filter(Boolean)
+      : Object.keys(parsed.models || {});
+    const configPath = path.join(home, '.kimi-code', 'config.toml');
+    const config = fs.existsSync(configPath) ? fs.readFileSync(configPath, 'utf8') : '';
+    const configured = config.match(/^default_model\s*=\s*["']([^"']+)["']/m)?.[1] || null;
+    return [...new Set([configured, ...models].filter(Boolean))];
+  } catch {
+    return [];
+  }
 }
 
 function declaredRoles(tool) {
@@ -283,6 +338,10 @@ function codexModelInventory(home, runner = spawnSync, binary = executable('code
 }
 
 function resolveModels(inventory, tool = 'opencode') {
+  if (tool === 'kimi') {
+    const selected = inventory[0] || null;
+    return Object.fromEntries(Object.keys(declaredRoles(tool)).map((role) => [role, selected]));
+  }
   const available = new Set(inventory);
   return Object.fromEntries(Object.entries(declaredRoles(tool)).map(([role, candidates]) => [
     role,
@@ -291,6 +350,10 @@ function resolveModels(inventory, tool = 'opencode') {
 }
 
 function resolveFactoryModels(inventory, tool = 'opencode') {
+  if (tool === 'kimi') {
+    const selected = inventory[0] || null;
+    return Object.fromEntries(Object.keys(declaredClasses(tool)).map((modelClass) => [modelClass, selected]));
+  }
   const available = new Set(inventory);
   return Object.fromEntries(Object.entries(declaredClasses(tool)).map(([modelClass, candidates]) => [
     modelClass,
@@ -424,9 +487,25 @@ function claudeModelProbe(home, model, runner = spawnSync, binary = executable('
   return { model, ok: false, reason: `Claude returned no verified response${result?.status ? ` (status ${result.status})` : ''}`, authFailure: false, tokens, cost };
 }
 
+function kimiModelProbe(home, model, runner = spawnSync, binary = executable('kimi')) {
+  const marker = 'ORCHESTRA_KIMI_OK';
+  if (!binary) return { model, ok: false, reason: 'Kimi Code CLI not found', authFailure: false, tokens: null, cost: null };
+  const result = runner(binary, [
+    '--model', model, '--prompt', `Reply with exactly ${marker}. Do not use tools.`, '--output-format', 'text',
+  ], { encoding: 'utf8', timeout: 45000, env: targetEnvironment(home), input: '' });
+  const output = String(result?.stdout || '').replace(/^\s*[•*-]\s*/gm, '').trim();
+  const diagnostic = `${result?.stdout || ''}\n${result?.stderr || ''}`;
+  const authFailure = /(?:\b401\b|unauthori[sz]ed|not logged in|invalid\s+(?:auth(?:entication)?\s+)?token|token\s+(?:is\s+)?invalid)/i.test(diagnostic);
+  if (output === marker && result?.status === 0) return { model, ok: true, reason: 'verified response', authFailure: false, tokens: null, cost: null };
+  if (authFailure) return { model, ok: false, reason: 'Kimi authentication rejected', authFailure: true, tokens: null, cost: null };
+  if (result?.error?.code === 'ETIMEDOUT') return { model, ok: false, reason: 'model probe timed out', authFailure: false, tokens: null, cost: null };
+  return { model, ok: false, reason: `Kimi returned no verified response${result?.status ? ` (status ${result.status})` : ''}`, authFailure: false, tokens: null, cost: null };
+}
+
 function probeForTool(tool) {
   if (tool === 'codex') return codexModelProbe;
   if (tool === 'claude') return claudeModelProbe;
+  if (tool === 'kimi') return kimiModelProbe;
   return modelProbe;
 }
 
@@ -454,19 +533,30 @@ function resolveExecutableCandidates(home, inventory, candidatesByKey, probeMode
 }
 
 function resolveExecutableModels(home, inventory, probeModel = modelProbe, tool = 'opencode') {
-  return resolveExecutableCandidates(home, inventory, declaredRoles(tool), probeModel, tool);
+  const candidates = tool === 'kimi'
+    ? Object.fromEntries(Object.keys(declaredRoles(tool)).map((role) => [role, inventory]))
+    : declaredRoles(tool);
+  return resolveExecutableCandidates(home, inventory, candidates, probeModel, tool);
 }
 
 function resolveExecutableFactoryModels(home, inventory, probeModel = modelProbe, tool = 'opencode') {
-  return resolveExecutableCandidates(home, inventory, declaredClasses(tool), probeModel, tool);
+  const candidates = tool === 'kimi'
+    ? Object.fromEntries(Object.keys(declaredClasses(tool)).map((modelClass) => [modelClass, inventory]))
+    : declaredClasses(tool);
+  return resolveExecutableCandidates(home, inventory, candidates, probeModel, tool);
 }
 
 function printModelProbes(resolution, tool = 'opencode') {
   console.log(`INFO ${tool} live model smoke check — ${resolution.probes.length} minimal request(s)`);
   for (const probe of resolution.probes) console.log(`${probe.ok ? 'PASS' : 'FAIL'} executable model ${probe.model} — ${probe.reason}`);
-  const tokens = resolution.probes.reduce((sum, probe) => sum + probe.tokens, 0);
-  const cost = resolution.probes.reduce((sum, probe) => sum + probe.cost, 0);
-  console.log(`INFO model smoke usage — ${tokens} tokens; $${cost.toFixed(6)}`);
+  const hasCompleteUsage = resolution.probes.every((probe) => Number.isFinite(probe.tokens) && Number.isFinite(probe.cost));
+  if (hasCompleteUsage) {
+    const tokens = resolution.probes.reduce((sum, probe) => sum + probe.tokens, 0);
+    const cost = resolution.probes.reduce((sum, probe) => sum + probe.cost, 0);
+    console.log(`INFO model smoke usage — ${tokens} tokens; $${cost.toFixed(6)}`);
+  } else {
+    console.log(`INFO model smoke usage — unavailable from ${tool} probe output`);
+  }
   for (const provider of resolution.blockedProviders) console.log(`WARN provider ${provider} rejected authentication; remaining ${provider} candidates were skipped`);
 }
 
@@ -501,6 +591,7 @@ function personaTarget(tool, home) {
   if (tool === 'opencode') return path.join(home, '.config', 'opencode', 'AGENTS.md');
   if (tool === 'claude') return path.join(home, '.claude', 'CLAUDE.md');
   if (tool === 'codex') return path.join(home, '.codex', 'AGENTS.md');
+  if (tool === 'kimi') return path.join(home, '.kimi-code', 'AGENTS.md');
   return path.join(home, '.cursor', 'rules', 'lenka.mdc');
 }
 
@@ -560,7 +651,7 @@ function buildPlan(options) {
       });
     }
     if (options.project) {
-      const projectAgents = path.join(options.project, `.${tool}`, 'agents');
+      const projectAgents = path.join(options.project, ...tools[tool].projectAgentPath);
       for (const agent of agents) {
         const extension = tool === 'codex' ? '.toml' : '.md';
         const selectedModel = selectedAgentModel(agent.name, resolvedModels, resolvedFactoryModels);
@@ -728,9 +819,9 @@ function doctor(options) {
     check(false, 'source validation', error.message);
   }
   const nodeVersion = version('node');
-  const herdrVersion = version('herdr');
   check(Boolean(nodeVersion), 'Node.js', nodeVersion || 'not found');
-  check(Boolean(herdrVersion), 'Herdr runtime', herdrVersion || 'not found');
+  const herdrVersion = version('herdr');
+  console.log(`INFO optional Herdr runtime — ${herdrVersion || 'not installed'}`);
   for (const tool of options.selectedTools) {
     const toolVersion = version(tools[tool].command);
     check(Boolean(toolVersion), `${tool} CLI`, toolVersion || 'not found');
@@ -825,4 +916,4 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
 }
 
-export { parseFrontmatter, parseAgent, codexAgent, buildPlan, classify, modelInventory, modelProbe, codexModelInventory, codexModelProbe, claudeModelProbe, resolveModels, resolveFactoryModels, resolveExecutableModels, resolveExecutableFactoryModels, createAgentCharter, runtimeManifest, main };
+export { parseFrontmatter, parseAgent, codexAgent, kimiAgent, buildPlan, classify, modelInventory, modelProbe, codexModelInventory, codexModelProbe, claudeModelProbe, kimiModelInventory, kimiModelProbe, resolveModels, resolveFactoryModels, resolveExecutableModels, resolveExecutableFactoryModels, createAgentCharter, runtimeManifest, main };

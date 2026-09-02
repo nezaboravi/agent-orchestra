@@ -1,8 +1,9 @@
 # agent-orchestra
 
 Your portable development team: Lenka orchestrates specialized agents that turn
-intent into verified behavior. Herdr is the persistent runtime; Codex, Claude
-Code, and OpenCode have provider-neutral adapters behind the same team rules.
+intent into verified behavior. `lenka up` launches Codex, Claude Code, Kimi
+Code, or OpenCode directly. Herdr is an optional persistent workspace, not a
+dependency of the orchestra.
 
 ## What you get
 
@@ -22,9 +23,9 @@ Code, and OpenCode have provider-neutral adapters behind the same team rules.
 ## Start on a new computer
 
 The bootstrap detects the platform, installs an isolated Node.js runtime when
-needed, installs Herdr, detects an authenticated harness, installs the team,
-verifies a real model response, and opens Lenka directly inside a dedicated
-`agent-orchestra` Herdr session.
+needed, detects an authenticated harness, installs the team, verifies a real
+model response, and opens Lenka directly in the selected CLI. Herdr is installed
+only when `--herdr` is requested.
 It does not depend on Homebrew, Laravel Herd, a particular username, or a
 machine-specific project directory.
 
@@ -35,7 +36,9 @@ command into the user's local executable directory. From any project:
 lenka up
 lenka up codex
 lenka up claude
+lenka up kimi
 lenka up opencode
+lenka up opencode --herdr
 lenka up --ask
 lenka status
 lenka doctor
@@ -44,9 +47,9 @@ lenka doctor
 `lenka up` auto-detects an authenticated harness. An explicit harness keeps
 all routing inside that service. The conductor uses the verified `mid`
 coordination model; one-run workers independently use economy, mid, or
-strongest routes according to their capability profile. Each absolute project
-path gets its own stable Herdr session, so opening one project can never attach
-to another project's persisted panes.
+strongest routes according to their capability profile. The default path opens
+that CLI directly. If `--herdr` is added, each absolute project path gets its
+own stable Herdr session.
 
 Native Windows currently supports `lenka up` through OpenCode. Codex and
 Claude selection through the Lenka command is implemented for macOS and Linux;
@@ -76,15 +79,17 @@ you explicitly want the old files preserved and replaced.
 
 Credentials are never copied between tools. In automatic mode the Unix
 bootstrap tries Codex with an existing ChatGPT sign-in, then Claude Code with
-Haiku as its economical first route, then OpenCode providers such as Kimi. A harness is selected only after a minimal
-live response succeeds. If none works, verification stops and asks the user to
-sign in; it never claims READY from a model list alone.
+Haiku as its economical first route, then Kimi Code, then OpenCode. A harness
+is selected only after a minimal live response succeeds. If none works,
+verification stops and asks the user to sign in; it never claims READY from a
+model list alone.
 
 Choose a harness explicitly when wanted:
 
 ```sh
 ./bootstrap.sh --harness codex
 ./bootstrap.sh --harness claude
+./bootstrap.sh --harness kimi
 ./bootstrap.sh --harness opencode
 ```
 
@@ -132,8 +137,8 @@ node orchestra.mjs install --conflict backup
 node orchestra.mjs doctor --installed
 ```
 
-The doctor command checks Node.js, Herdr, the selected harness, agent definitions, and
-permission invariants. The dry run shows every target before anything changes.
+The doctor command checks Node.js, the selected harness, agent definitions, and
+permission invariants; it reports Herdr only as an optional tool. The dry run shows every target before anything changes.
 The explicit `backup` policy preserves replaced files and writes a recovery
 manifest. By default, a conflict stops the entire installation before the first
 write. Existing symbolic links are protected and never replaced, including
@@ -153,35 +158,40 @@ Its ignored recovery manifests stay inside `.agent-orchestra/` in that project.
 
 Codex and Claude Code have authenticated adapter proofs; their complete
 PLAN → BUILD → VERIFY → PROVE behavior proofs are still pending. OpenCode is
-the original adapter. Cursor remains experimental and requires `--experimental`.
+the original adapter. Kimi Code has an authenticated direct-adapter proof; its
+complete behavior proof is still pending. Cursor remains experimental and
+requires `--experimental`.
 
 | Tool | Status | Agents (global) | Teams (explicit project install) | Persona |
 |---|---|---|---|---|
 | OpenCode | Supported | `~/.config/opencode/agents/*.md` | `.opencode/agents/` | `~/.config/opencode/AGENTS.md` |
 | Claude Code | Authenticated adapter; full behavior proof pending | `~/.claude/agents/*.md` | `.claude/agents/` | `~/.claude/CLAUDE.md` |
 | Codex | Authenticated adapter; full behavior proof pending | `~/.codex/agents/*.toml` | `.codex/agents/` | `~/.codex/AGENTS.md` |
+| Kimi Code | Authenticated direct adapter; full behavior proof pending | `~/.kimi-code/agents/*.md` | `.kimi-code/agents/` | `~/.kimi-code/AGENTS.md` |
 | Cursor | Experimental | `~/.cursor/agents/*.md` | `.cursor/agents/` | `~/.cursor/rules/lenka.mdc` |
 
 Shared skills are installed into `~/.agents/skills`. Project files are never
 written merely because the installer was launched from that directory.
 
-## Runtime
+## Direct runtime and optional Herdr
 
-Start Herdr from a project. The bootstrap configures its pane to open the
-verified harness automatically:
+The normal path starts Lenka in the chosen CLI without Herdr:
 
 ```sh
 cd /path/to/project
-herdr
+lenka up codex
 ```
 
-The bootstrap derives a stable named session from the project's absolute path
-and starts the selected harness with Lenka's instructions. Re-running it for
-the same project reattaches to that project's persistent session; a different
-project gets an independent session.
-Herdr keeps the real terminal sessions alive and exposes agent state and
-automation. It does not replace the selected harness; it gives the agent team
-somewhere to run. Desktop clients remain optional.
+Use Herdr only when persistent panes are useful:
+
+```sh
+lenka up opencode --herdr
+```
+
+That optional path derives a stable session name from the absolute project
+path, so different projects cannot attach to the same persisted panes. Herdr
+does not choose the model or perform orchestration; the selected CLI still
+does that work. Desktop clients remain optional.
 
 The user's explicit instruction to start work authorizes normal agent dispatch.
 The orchestra announces the selected roles and models, then continues without
@@ -213,15 +223,16 @@ next declared candidate.
   unverified adapters are opt-in.
 - **Skills have one source** — adapters expose the shared location when their
   client supports it.
-- **Models are adapter-specific** — Codex, Claude, and OpenCode never share
-  credentials or model identifiers. Availability is checked with a real
-  response, and actual usage is reported after the run.
+- **Models are adapter-specific** — Codex, Claude, Kimi, and OpenCode never
+  share credentials or model identifiers. Availability is checked with a real
+  response, and actual usage is reported after the run. Without a configured
+  Kimi subagent model pool, Kimi workers inherit its verified configured model.
 - **Roles are ephemeral** — Lenka creates them for one outcome; reusable agent
   files provide tested permission envelopes rather than a fixed org chart.
 
 ## See also
 
 - `docs/FORMATS.md` — the format map
-- `docs/ARCHITECTURE.md` — Herdr/OpenCode layers and portability contract
+- `docs/ARCHITECTURE.md` — direct CLI layers and portability contract
 - `docs/PORTABILITY.md` — platform support, verification levels, and test matrix
 - `proofs/laravel-intent-proof.md` — the repeatable first Laravel acceptance task

@@ -5,6 +5,7 @@ param(
     [switch]$ProjectOnly,
     [ValidateSet("fail", "skip", "backup")]
     [string]$Conflict = "fail",
+    [switch]$UseHerdr,
     [switch]$NoLaunch,
     [switch]$StructuralOnly
 )
@@ -80,7 +81,7 @@ if (-not (Test-UsableNode)) {
     $env:Path = "$NodeDir;$env:Path"
 }
 
-if ($null -eq (Get-Command herdr.exe -ErrorAction SilentlyContinue)) {
+if ($UseHerdr -and $null -eq (Get-Command herdr.exe -ErrorAction SilentlyContinue)) {
     Write-Step "Installing Herdr into the isolated runtime"
     $Temporary = Join-Path ([System.IO.Path]::GetTempPath()) ("agent-orchestra-herdr-" + [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $Temporary | Out-Null
@@ -114,7 +115,7 @@ if ($null -eq (Get-Command opencode.exe -ErrorAction SilentlyContinue) -and $nul
 }
 
 $Node = (Get-Command node.exe).Source
-$Herdr = (Get-Command herdr.exe).Source
+$HerdrExe = if ($UseHerdr) { (Get-Command herdr.exe).Source } else { $null }
 $OpenCodeCommand = Get-Command opencode.exe -ErrorAction SilentlyContinue
 if ($null -eq $OpenCodeCommand) { $OpenCodeCommand = Get-Command opencode.cmd -ErrorAction Stop }
 
@@ -126,7 +127,7 @@ if ($env:LENKA_CLI_ACTIVE -ne "1" -and (Test-Path -LiteralPath (Join-Path $RepoD
 
 Write-Step "Detected tools"
 & $Node --version
-& $Herdr --version
+if ($UseHerdr) { & $HerdrExe --version }
 & $OpenCodeCommand.Source --version
 
 $InstallArgs = @("install", "--home", $TargetHome, "--conflict", $Conflict)
@@ -174,12 +175,6 @@ $OpenCodePrimaryModel = [string]$RuntimeRouting.primary.model
 if ([string]::IsNullOrWhiteSpace($OpenCodePrimaryModel)) {
     throw "No verified OpenCode coordination model was recorded for Lenka."
 }
-$SessionName = & $Node (Join-Path $RepoDir "session-name.mjs") $LaunchDir
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($SessionName)) {
-    throw "Could not derive the project Herdr session name."
-}
-Write-Host "Herdr session: $SessionName"
-Write-Step "Opening the dedicated project Herdr session"
 $OpenCodeExe = Join-Path $NpmPrefix "node_modules\opencode-ai\bin\opencode.exe"
 if (-not (Test-Path -LiteralPath $OpenCodeExe -PathType Leaf)) {
     if ($OpenCodeCommand.Source.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -194,16 +189,30 @@ if (-not (Test-Path -LiteralPath $OpenCodeExe -PathType Leaf)) {
         }
     }
 }
-$HerdrConfig = Join-Path $RuntimeDir "herdr.toml"
-$TomlOpenCode = $OpenCodeExe.Replace("\", "\\").Replace('"', '\"')
-$HerdrConfigContent = @"
+$env:AGENT_ORCHESTRA_HARNESS = "opencode"
+$env:AGENT_ORCHESTRA_HARNESS_BINARY = $OpenCodeExe
+$env:AGENT_ORCHESTRA_PRIMARY_MODEL = $OpenCodePrimaryModel
+if ($UseHerdr) {
+    $SessionName = & $Node (Join-Path $RepoDir "session-name.mjs") $LaunchDir
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($SessionName)) {
+        throw "Could not derive the project Herdr session name."
+    }
+    Write-Host "Herdr session: $SessionName"
+    Write-Step "Opening OpenCode inside the project Herdr session"
+    $HerdrConfig = Join-Path $RuntimeDir "herdr.toml"
+    $TomlOpenCode = $OpenCodeExe.Replace("\", "\\").Replace('"', '\"')
+    $HerdrConfigContent = @"
 [terminal]
 default_shell = "$TomlOpenCode"
 shell_mode = "non_login"
 new_cwd = "current"
 "@
-$Utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
-[System.IO.File]::WriteAllText($HerdrConfig, $HerdrConfigContent, $Utf8WithoutBom)
-$env:HERDR_CONFIG_PATH = $HerdrConfig
-$env:OPENCODE_CONFIG_CONTENT = @{ default_agent = "lenka"; model = $OpenCodePrimaryModel } | ConvertTo-Json -Compress
-& $Herdr --session $SessionName
+    $Utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($HerdrConfig, $HerdrConfigContent, $Utf8WithoutBom)
+    $env:HERDR_CONFIG_PATH = $HerdrConfig
+    $env:OPENCODE_CONFIG_CONTENT = @{ default_agent = "lenka"; model = $OpenCodePrimaryModel } | ConvertTo-Json -Compress
+    & $HerdrExe --session $SessionName
+} else {
+    Write-Step "Opening Lenka directly in OpenCode"
+    & $Node (Join-Path $RepoDir "harness-launcher.mjs")
+}

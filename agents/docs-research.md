@@ -1,7 +1,6 @@
 ---
 description: Researches current non-Laravel library documentation through Context7 and official primary sources.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 variant: high
 steps: 12
 color: info

@@ -22,33 +22,47 @@ test('both bootstraps verify the pinned Node archive checksum', () => {
   assert.match(windows, /Get-FileHash -Algorithm SHA256/);
 });
 
-test('bootstraps install Herdr and the orchestra with platform-supported harnesses', () => {
+test('bootstraps install the orchestra while keeping Herdr optional', () => {
   for (const source of [unix, windows]) {
     assert.match(source, /herdr\.dev\/(?:install|latest)/);
     assert.match(source, /orchestra\.mjs/);
     assert.match(source, /--installed/);
     assert.match(source, /--structural/);
   }
+  assert.match(unix, /if \[ "\$USE_HERDR" -eq 1 \]; then install_herdr; fi/);
+  assert.match(windows, /if \(\$UseHerdr -and \$null -eq \(Get-Command herdr\.exe/);
   assert.match(unix, /chatgpt\.com\/codex\/install\.sh/);
-  assert.match(unix, /CANDIDATES="codex claude opencode"/);
+  assert.match(unix, /CANDIDATES="codex claude kimi opencode"/);
   assert.match(unix, /trying the next configured harness/i);
   assert.match(windows, /opencode-ai/);
 });
 
-test('both bootstraps derive a dedicated Herdr session from the project path', () => {
+test('Unix bootstrap launches the selected CLI directly by default', () => {
+  assert.match(unix, /step "Opening Lenka directly in \$SELECTED_HARNESS"/);
+  assert.match(unix, /exec node "\$REPO_DIR\/harness-launcher\.mjs"/);
+  assert.match(unix, /runtime\/\$SELECTED_HARNESS\.json/);
+  assert.match(unix, /AGENT_ORCHESTRA_PRIMARY_MODEL/);
+});
+
+test('Herdr remains an explicit project-scoped option', () => {
   assert.match(unix, /session-name\.mjs/);
   assert.match(windows, /session-name\.mjs/);
+  assert.match(unix, /if \[ "\$USE_HERDR" -eq 1 \]; then/);
+  assert.match(windows, /if \(\$UseHerdr\)/);
   assert.match(unix, /herdr --session "\$session_name"/);
   assert.match(windows, /--session \$SessionName/);
   assert.doesNotMatch(unix, /herdr --session agent-orchestra/);
   assert.doesNotMatch(windows, /--session agent-orchestra/);
   assert.match(windows, /default_agent = "lenka"; model = \$OpenCodePrimaryModel/);
-  assert.match(unix, /runtime\/\$SELECTED_HARNESS\.json/);
   assert.match(windows, /runtime\\opencode\.json/);
-  assert.match(unix, /AGENT_ORCHESTRA_PRIMARY_MODEL/);
   assert.match(unix, /harness-launcher\.mjs/);
   assert.match(unix, /default_shell/);
   assert.match(windows, /default_shell/);
+});
+
+test('Windows launches Lenka directly in OpenCode unless Herdr is requested', () => {
+  assert.match(windows, /Write-Step "Opening Lenka directly in OpenCode"/);
+  assert.match(windows, /harness-launcher\.mjs/);
 });
 
 test('Unix bootstrap does not modify shell startup files', () => {

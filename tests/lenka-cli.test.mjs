@@ -11,7 +11,8 @@ const cli = path.join(repoRoot, 'lenka.mjs');
 test('Lenka CLI exposes the portable orchestration commands', () => {
   const result = spawnSync(process.execPath, [cli, '--help'], { encoding: 'utf8' });
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /lenka up \[auto\|codex\|claude\|opencode\]/);
+  assert.match(result.stdout, /lenka up \[auto\|codex\|claude\|kimi\|opencode\]/);
+  assert.match(result.stdout, /--herdr/);
   assert.match(result.stdout, /lenka status/);
   assert.match(result.stdout, /lenka doctor/);
 });
@@ -40,4 +41,5 @@ test('Lenka defaults up to auto and the current project', async () => {
   assert.equal(parsed.harness, null);
   assert.equal(parsed.project, process.cwd());
   assert.equal(parsed.conflict, 'backup');
+  assert.equal(parsed.herdr, false);
 });

@@ -1,7 +1,6 @@
 ---
 description: Fast read-only repository explorer for locating code, conventions, dependencies, and likely change surfaces.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 variant: high
 steps: 12
 color: info

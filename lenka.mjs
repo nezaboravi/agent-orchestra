@@ -8,26 +8,29 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
-const harnesses = ['auto', 'codex', 'claude', 'opencode'];
+const harnesses = ['auto', 'codex', 'claude', 'kimi', 'opencode'];
 
 function usage() {
   console.log(`Lenka — your agent orchestra
 
 Usage:
-  lenka up [auto|codex|claude|opencode] [options]
+  lenka up [auto|codex|claude|kimi|opencode] [options]
   lenka status [--project PATH]
-  lenka doctor [codex|claude|opencode] [--project PATH]
+  lenka doctor [codex|claude|kimi|opencode] [--project PATH]
 
 Options:
   --project PATH       Project to open (default: current directory)
   --ask                Choose the harness interactively
-  --no-launch          Install and verify without opening Herdr
+  --herdr              Run the selected CLI inside Herdr
+  --no-launch          Install and verify without opening the selected CLI
   --conflict POLICY    fail, skip, or backup (default for up: backup)
   --help               Show this help
 
 Examples:
   lenka up
   lenka up codex
+  lenka up kimi
+  lenka up opencode --herdr
   lenka up --ask
   lenka status
 `);
@@ -40,6 +43,7 @@ function parse(input) {
   let harness = null;
   let project = process.cwd();
   let ask = false;
+  let herdr = false;
   let noLaunch = false;
   let conflict = 'backup';
   while (args.length) {
@@ -50,6 +54,7 @@ function parse(input) {
       if (!value) throw new Error('--project requires a path');
       project = path.resolve(value);
     } else if (arg === '--ask') ask = true;
+    else if (arg === '--herdr') herdr = true;
     else if (arg === '--no-launch') noLaunch = true;
     else if (arg === '--conflict') {
       conflict = args.shift();
@@ -57,7 +62,7 @@ function parse(input) {
     } else if (arg === '--help' || arg === '-h') return { command: 'help' };
     else throw new Error(`unknown argument: ${arg}`);
   }
-  return { command, harness, project, ask, noLaunch, conflict };
+  return { command, harness, project, ask, herdr, noLaunch, conflict };
 }
 
 function manifests(project) {
@@ -77,10 +82,11 @@ async function chooseHarness() {
     console.log('  1. Auto-detect (recommended)');
     console.log('  2. Codex');
     console.log('  3. Claude Code');
-    console.log('  4. OpenCode');
+    console.log('  4. Kimi Code');
+    console.log('  5. OpenCode');
     const answer = (await prompt.question('\nSelection [1]: ')).trim() || '1';
-    const selected = { 1: 'auto', 2: 'codex', 3: 'claude', 4: 'opencode' }[answer];
-    if (!selected) throw new Error('selection must be 1, 2, 3, or 4');
+    const selected = { 1: 'auto', 2: 'codex', 3: 'claude', 4: 'kimi', 5: 'opencode' }[answer];
+    if (!selected) throw new Error('selection must be 1, 2, 3, 4, or 5');
     return selected;
   } finally {
     prompt.close();
@@ -111,10 +117,12 @@ async function up(options) {
     }
     const windows = ['-Project', options.project, '-ProjectOnly', '-Conflict', options.conflict];
     if (options.noLaunch) windows.push('-NoLaunch');
+    if (options.herdr) windows.push('-UseHerdr');
     return run('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(repoRoot, 'bootstrap.ps1'), ...windows]);
   }
   const common = ['--project', options.project, '--project-only', '--conflict', options.conflict, '--harness', harness];
   if (options.noLaunch) common.push('--no-launch');
+  if (options.herdr) common.push('--herdr');
   return run('sh', [path.join(repoRoot, 'bootstrap.sh'), ...common]);
 }
 
@@ -142,7 +150,7 @@ function doctor(options) {
   const installed = manifests(options.project);
   const candidates = installed.map((manifest) => manifest.harness).filter((name) => name && name !== 'auto');
   const harness = options.harness || (candidates.length === 1 ? candidates[0] : null);
-  if (!harness) throw new Error('choose a harness: lenka doctor codex|claude|opencode');
+  if (!harness) throw new Error('choose a harness: lenka doctor codex|claude|kimi|opencode');
   return run(process.execPath, [path.join(repoRoot, 'orchestra.mjs'), 'doctor', '--tool', harness, '--project', options.project, '--project-only', '--installed']);
 }
 

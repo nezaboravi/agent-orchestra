@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { buildPlan, classify, codexAgent, codexModelInventory, codexModelProbe, createAgentCharter, main, modelProbe, parseAgent, parseFrontmatter, resolveExecutableFactoryModels, resolveExecutableModels, resolveFactoryModels, resolveModels, runtimeManifest } from '../orchestra.mjs';
+import { buildPlan, classify, codexAgent, codexModelInventory, codexModelProbe, createAgentCharter, kimiAgent, kimiModelInventory, kimiModelProbe, main, modelProbe, parseAgent, parseFrontmatter, resolveExecutableFactoryModels, resolveExecutableModels, resolveFactoryModels, resolveModels, runtimeManifest } from '../orchestra.mjs';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 
@@ -68,6 +68,39 @@ test('Codex inventory and live probe use Codex-native model slugs', () => {
   const result = codexModelProbe('/fake/home', 'gpt-5.6-luna', probeRunner, '/fake/codex');
   assert.equal(result.ok, true);
   assert.equal(result.tokens, 42);
+});
+
+test('Kimi conversion preserves the main orchestrator and least-privilege role tools', () => {
+  const lenka = parseAgent(path.join(repoRoot, 'agents', 'lenka.md'));
+  const builder = parseAgent(path.join(repoRoot, 'teams', 'dev', 'dev-builder.md'));
+  const auditor = parseAgent(path.join(repoRoot, 'teams', 'dev', 'dev-auditor.md'));
+
+  assert.match(kimiAgent(lenka), /\$\{base_prompt\}/);
+  assert.match(kimiAgent(lenka), /^  - Agent$/m);
+  assert.doesNotMatch(kimiAgent(lenka), /^  - (Write|Edit|Bash)$/m);
+  assert.match(kimiAgent(builder), /^  - (Write|Edit)$/m);
+  assert.match(kimiAgent(builder), /^  - Bash$/m);
+  assert.match(kimiAgent(auditor), /^  - Bash$/m);
+  assert.doesNotMatch(kimiAgent(auditor), /^  - (Write|Edit)$/m);
+});
+
+test('Kimi inventory prioritizes the configured default without exposing provider configuration', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-orchestra-kimi-home-'));
+  fs.mkdirSync(path.join(home, '.kimi-code'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.kimi-code', 'config.toml'), 'default_model = "kimi-code/k3"\n');
+  const runner = () => ({
+    status: 0,
+    stdout: JSON.stringify({ models: { 'kimi-code/kimi-for-coding': { provider: 'secret-provider-data' }, 'kimi-code/k3': {} } }),
+  });
+  assert.deepEqual(kimiModelInventory(home, runner, '/fake/kimi'), ['kimi-code/k3', 'kimi-code/kimi-for-coding']);
+});
+
+test('Kimi live probe requires the exact marker response', () => {
+  const runner = () => ({ status: 0, stdout: '• ORCHESTRA_KIMI_OK\n', stderr: '' });
+  const result = kimiModelProbe('/fake/home', 'kimi-code/k3', runner, '/fake/kimi');
+  assert.equal(result.ok, true);
+  assert.equal(result.tokens, null);
+  assert.equal(result.cost, null);
 });
 
 test('unattended builder keeps destructive and external operations denied', () => {
@@ -178,21 +211,27 @@ test('model routing selects real candidates and degrades honestly', () => {
 test('model routing is adapter-specific', () => {
   const codex = resolveModels(['gpt-5.6-luna', 'gpt-5.6-sol'], 'codex');
   const claude = resolveModels(['haiku', 'sonnet', 'opus'], 'claude');
+  const kimi = resolveModels(['kimi-code/k3', 'kimi-code/kimi-for-coding'], 'kimi');
+  const opencode = resolveModels(['opencode-go/deepseek-v4-flash', 'opencode-go/kimi-k2.7-code'], 'opencode');
 
   assert.equal(codex['dev-lead'], 'gpt-5.6-luna');
   assert.equal(codex['dev-auditor'], 'gpt-5.6-luna');
   assert.equal(claude['dev-lead'], 'haiku');
   assert.equal(claude['dev-auditor'], 'haiku');
+  assert.ok(Object.values(kimi).every((model) => model === 'kimi-code/k3'));
+  assert.equal(opencode['dev-tester'], 'opencode-go/kimi-k2.7-code');
 });
 
 test('dynamic model classes are adapter-specific and ordered by cost policy', () => {
   const codex = resolveFactoryModels(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'], 'codex');
   const claude = resolveFactoryModels(['opus', 'sonnet', 'haiku'], 'claude');
   const opencode = resolveFactoryModels(['opencode-go/deepseek-v4-flash', 'opencode-go/kimi-k2.7-code'], 'opencode');
+  const kimi = resolveFactoryModels(['kimi-code/k3', 'kimi-code/kimi-for-coding'], 'kimi');
 
   assert.deepEqual(codex, { economy: 'gpt-5.6-luna', mid: 'gpt-5.6-terra', strongest: 'gpt-5.6-sol' });
   assert.deepEqual(claude, { economy: 'haiku', mid: 'sonnet', strongest: 'opus' });
   assert.equal(opencode.economy, 'opencode-go/kimi-k2.7-code');
+  assert.deepEqual(kimi, { economy: 'kimi-code/k3', mid: 'kimi-code/k3', strongest: 'kimi-code/k3' });
 });
 
 test('agent factory creates a one-run charter from the narrowest declared envelope', () => {
@@ -261,7 +300,8 @@ test('Lenka primary remains provider-neutral', () => {
   const lenka = fs.readFileSync(path.join(repoRoot, 'agents', 'lenka.md'), 'utf8');
   const parsed = parseAgent(path.join(repoRoot, 'agents', 'lenka.md'));
   assert.doesNotMatch(lenka, /^model:/m);
-  assert.match(lenka, /Codex, Claude Code, and OpenCode use separate adapter-specific model routes/);
+  assert.match(lenka, /Codex, Claude Code, Kimi Code, and OpenCode use separate adapter-specific model routes/);
+  assert.match(lenka, /Kimi Code has no configured subagent model pool/);
   assert.match(lenka, /Preserve every spawned agent identifier byte-for-byte/);
   assert.match(lenka, /Dynamic agent factory protocol/);
   assert.match(lenka, /Never ask the human to author this agent/);
@@ -271,6 +311,15 @@ test('Lenka primary remains provider-neutral', () => {
   assert.equal(parsed.frontmatter.permission.read['.agent-orchestra/runtime/*.json'], 'allow');
   assert.equal(parsed.frontmatter.permission.glob, 'deny');
   assert.equal(parsed.frontmatter.permission.grep, 'deny');
+});
+
+test('source permission envelopes do not pin any provider model', () => {
+  for (const directory of [path.join(repoRoot, 'agents'), path.join(repoRoot, 'teams', 'dev')]) {
+    for (const name of fs.readdirSync(directory).filter((entry) => entry.endsWith('.md'))) {
+      const source = fs.readFileSync(path.join(directory, name), 'utf8');
+      assert.doesNotMatch(source, /^model:\s*.+$/m, `${name} must receive its model from the active harness manifest`);
+    }
+  }
 });
 
 test('live model probe requires a verified text response and records usage', () => {

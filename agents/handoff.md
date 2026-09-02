@@ -1,7 +1,6 @@
 ---
 description: Creates or loads concise project-local session handoffs through controlled persistence tools.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 variant: high
 steps: 8
 color: secondary

@@ -12,7 +12,7 @@ const harness = process.env.AGENT_ORCHESTRA_HARNESS;
 const binary = process.env.AGENT_ORCHESTRA_HARNESS_BINARY;
 const model = process.env.AGENT_ORCHESTRA_PRIMARY_MODEL;
 
-if (!['codex', 'claude', 'opencode'].includes(harness) || !binary || !model) {
+if (!['codex', 'claude', 'kimi', 'opencode'].includes(harness) || !binary || !model) {
   console.error('ERROR: Lenka launcher is missing a verified harness or coordination model.');
   process.exit(1);
 }
@@ -22,6 +22,8 @@ if (harness === 'codex') {
   const persona = fs.readFileSync(path.join(repoRoot, 'AGENTS.md'), 'utf8');
   args.push('--config', `developer_instructions=${JSON.stringify(persona)}`);
   args.push('--sandbox', 'read-only', '--ask-for-approval', 'never');
+} else if (harness === 'kimi') {
+  args.push('--agent-file', path.join(process.cwd(), '.kimi-code', 'agents', 'lenka.md'), '--auto');
 } else {
   args.push('--agent', 'lenka');
 }

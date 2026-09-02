@@ -9,9 +9,10 @@ implicit dependency.
 1. **Intent** — the human states the outcome in ordinary language.
 2. **Orchestra** — `orchestra.json`, agent definitions, and team rules define
    roles, workflow, permissions, model classes, evidence, and escalation.
-3. **Runtime** — Herdr owns persistent terminal sessions and exposes agent
-   state and automation primitives.
-4. **Harness** — Codex, Claude Code, or OpenCode executes the same team rules.
+3. **Launcher** — `lenka up` verifies a route and starts the selected CLI
+   directly; Herdr is an optional persistent workspace.
+4. **Harness** — Codex, Claude Code, Kimi Code, or OpenCode executes the same
+   team rules.
 5. **Proof** — tests, static checks, independent audit, cost records, and the
    project handoff turn activity into verified behavior.
 
@@ -73,16 +74,22 @@ The installer must:
 - validate nested permissions before generating another tool's format.
 
 Codex and Claude Code have authenticated model and generated-format proofs;
-their full team behavior proofs are still pending. Cursor stays experimental
-until its generated output passes a real end-to-end run.
+their full team behavior proofs are still pending. Kimi Code has a native
+agent-format adapter and direct launcher. Cursor stays experimental until its
+generated output passes a real end-to-end run.
 
 Model names and credentials belong to an adapter. The Unix bootstrap tries the
-declared harness order (`codex`, `claude`, `opencode`) and requires a minimal
+declared harness order (`codex`, `claude`, `kimi`, `opencode`) and requires a minimal
 live response before selecting one. Codex uses its ChatGPT sign-in and own model
-catalog; Claude Code uses its own sign-in and starts with Haiku; OpenCode tests its declared provider
-candidates and can fall through from a rejected provider to Kimi. Tokens are
+catalog; Claude Code uses its own sign-in and starts with Haiku; Kimi Code uses
+its own provider configuration; OpenCode tests its own declared provider
+candidates. Tokens are
 never copied between authentication stores. A failed candidate is skipped; if
 all candidates fail, installation stops without claiming READY.
+
+Kimi Code inherits its configured main model for subagents when no subagent
+model pool exists. In that state the runtime manifest records the same verified
+model for every class instead of inventing economy, mid, and strongest routes.
 
 ## Cross-machine acceptance test
 
@@ -101,8 +108,8 @@ node orchestra.mjs install --conflict backup
 node orchestra.mjs doctor --installed
 ```
 
-Then Herdr must run the same small Laravel task through PLAN, BUILD, VERIFY,
-and PROVE. The result is accepted only when the trace names the actual agents
+Then the selected CLI must run the same small Laravel task through PLAN, BUILD,
+VERIFY, and PROVE. The result is accepted only when the trace names the actual agents
 and models, records available token and cost data, includes independent test
 and audit evidence, and saves a handoff.
 
